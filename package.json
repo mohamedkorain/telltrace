@@ -1,0 +1,38 @@
+{
+  "name": "telltrace",
+  "version": "0.1.0",
+  "description": "Instantly understand what Claude Code or Codex built — flowcharts, timelines, and visual session replays.",
+  "type": "module",
+  "bin": {
+    "telltrace": "./bin/telltrace.js"
+  },
+  "main": "./src/index.js",
+  "scripts": {
+    "start": "node bin/telltrace.js",
+    "test": "node --test test/"
+  },
+  "keywords": [
+    "claude-code",
+    "codex",
+    "agent",
+    "visualization",
+    "trace",
+    "replay",
+    "flowchart"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}
