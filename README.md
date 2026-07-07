@@ -1,10 +1,16 @@
 # telltrace
 
-> Instantly understand what Claude Code or Codex just built — flowcharts, file-touch timelines, and visual session replays.
+> Your agent session as a thread you can actually read.
 
-When an agent works for 20 minutes and touches 40 files, you want to know *what it actually did* before reading the diff. **telltrace** turns a session transcript into a single self-contained HTML page: a flowchart of every prompt → tool-call branch, a swimlane timeline of every file touch, and an expandable per-prompt breakdown.
+Claude Code just worked for 40 minutes and touched 30 files. Before you commit — or when a teammate asks "how was this made?" — you need the story, not a 4000-line JSONL file.
 
-No backend. No login. One HTML file you can drop into Slack.
+**telltrace** renders any Claude Code session as a familiar, Reddit-style thread:
+
+- **Your prompts are posts.** Title, body, an ops-count in the karma gutter, file flair.
+- **The agent's work is the comment thread.** Claude's narration becomes comments; the tool calls it made under each one are collapsed into compact runs (`Edit ×6 render.js`), threaded and foldable exactly like Reddit comments.
+- **The sidebar is "About this session".** Prompts, tool calls, files touched, duration, token usage — plus an activity graph, top files, and tool mix.
+
+One self-contained HTML file. No server, no login, works offline. Drop it in Slack, attach it to a PR, post it.
 
 ## Install
 
@@ -12,45 +18,41 @@ No backend. No login. One HTML file you can drop into Slack.
 npm install -g telltrace
 ```
 
-Or run without installing:
+Or zero-install:
 
 ```bash
-npx telltrace ~/.claude/projects/<your-project>/session.jsonl
+npx telltrace --latest --open
 ```
 
 ## Usage
 
 ```bash
-# Render a session JSONL to ./trace.html
-telltrace session.jsonl
-
-# Render the most recent Claude Code session and open it
+# Your most recent Claude Code session, opened in the browser
 telltrace --latest --open
 
-# Point at a project directory and pick the newest session
-telltrace ~/.claude/projects/-Users-you-repo
+# A specific session
+telltrace ~/.claude/projects/<project>/<session>.jsonl --open
 
-# Custom output path
-telltrace session.jsonl -o ~/Desktop/replay.html --open
+# Newest session in a project directory
+telltrace ~/.claude/projects/<project> --open
+
+# Custom output
+telltrace --latest -o replay.html
 ```
 
-## What you get
+## Why
 
-- **Flow** — a Mermaid flowchart with one branch per prompt, color-coded by tool (read / edit / write / bash / agent / search / web).
-- **File touches** — a swimlane timeline showing every read/edit/write/bash hit per file across the session.
-- **Session** — each prompt expanded with the tool calls it triggered and the args, ready to inspect.
-
-## Status
-
-Early. v0.1 supports Claude Code JSONL sessions. Codex adapter in progress.
+- **Audit before you commit.** Autonomous runs need receipts.
+- **Explain your PR.** Attach the trace; reviewers see every prompt and every file the agent read before it wrote.
+- **Share the run.** "Built in 43 minutes" hits different with the thread to prove it.
 
 ## Roadmap
 
 - [ ] Codex log adapter
-- [ ] Subagent expansion (nested Agent tool calls)
-- [ ] Inline diff preview per file
-- [ ] VS Code extension
-- [ ] Web viewer with shareable links
+- [ ] Subagent threads (nested one level deeper, like real comment trees)
+- [ ] Inline diffs per Edit/Write
+- [ ] `telltrace share` — hosted, linkable traces
+- [ ] GitHub Action: auto-attach a trace to agent-generated PRs
 
 ## License
 

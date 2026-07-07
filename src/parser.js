@@ -5,6 +5,7 @@ export function parseSession(raw, { sourcePath = null } = {}) {
   let model = null;
   let firstTs = null;
   let lastTs = null;
+  const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 
   for (const line of lines) {
     let entry;
@@ -19,6 +20,14 @@ export function parseSession(raw, { sourcePath = null } = {}) {
       lastTs = ts;
     }
     if (entry.model && !model) model = entry.model;
+    if (!model && entry.message?.model) model = entry.message.model;
+    const u = entry.message?.usage;
+    if (u) {
+      usage.input += u.input_tokens ?? 0;
+      usage.output += u.output_tokens ?? 0;
+      usage.cacheRead += u.cache_read_input_tokens ?? 0;
+      usage.cacheWrite += u.cache_creation_input_tokens ?? 0;
+    }
 
     const norm = normalizeEntry(entry);
     for (const e of norm) {
@@ -38,6 +47,7 @@ export function parseSession(raw, { sourcePath = null } = {}) {
     endedAt: lastTs,
     events,
     files: [...filesTouched.values()],
+    usage,
   };
 }
 
