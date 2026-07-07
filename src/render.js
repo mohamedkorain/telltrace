@@ -23,10 +23,12 @@ const ICON = {
 const UP = '<path d="M8 2.5 13.5 9h-3.4v4.5H5.9V9H2.5Z"/>';
 
 export function renderHTML(session) {
-  const { events, files, model, startedAt, endedAt, sourcePath, usage } = session;
+  const { events, files, model, startedAt, endedAt, sourcePath, usage, usageByModel } = session;
   const posts = buildPosts(events, startedAt);
   const toolCalls = events.filter(e => e.type === 'tool_call');
   const community = communityName(sourcePath);
+  const models = Object.keys(usageByModel ?? {}).filter(m => m !== 'unknown' && !m.includes('synthetic'));
+  const multiModel = models.length > 1;
 
   return `<!doctype html>
 <html lang="en">
@@ -45,16 +47,17 @@ ${banner(community, model, startedAt)}
 <div class="shell">
   <main class="feed">
     <div class="sortbar">
-      <button class="sort active" data-sort="hot">${flame()} Chronological</button>
-      <button class="sort" data-sort="top">${UP_SVG()} Top</button>
-      <span class="sortbar-right">${posts.length} posts</span>
+      <button class="sort active" data-sort="hot" data-tip="Posts in the order they happened during the session">${flame()} Timeline</button>
+      <button class="sort" data-sort="top" data-tip="Posts ranked by tool calls — the prompts that made the agent work hardest first">${UP_SVG()} Most work</button>
+      <span class="sortbar-right">${posts.length} prompts</span>
     </div>
     <div id="posts">
-      ${posts.map(renderPost).join('\n')}
+      ${posts.map(p => renderPost(p, multiModel)).join('\n')}
     </div>
   </main>
   <aside class="rail">
-    ${aboutCard(posts, toolCalls, files, usage, model, startedAt, endedAt)}
+    ${aboutCard(posts, toolCalls, files, usage, usageByModel, startedAt, endedAt)}
+    ${modelsCard(usageByModel)}
     ${activityCard(toolCalls, posts)}
     ${filesCard(files)}
     ${toolsCard(toolCalls)}
@@ -91,6 +94,9 @@ function buildPosts(events, startedAt) {
     const comments = threadify(p.items);
     const calls = p.items.filter(e => e.type === 'tool_call');
     const filesTouched = new Set(calls.filter(c => c.file).map(c => c.file));
+    const modelCounts = {};
+    for (const it of p.items) if (it.model) modelCounts[it.model] = (modelCounts[it.model] ?? 0) + 1;
+    const postModel = Object.entries(modelCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
     return {
       n: i + 1,
       prompt: p.prompt,
@@ -98,6 +104,7 @@ function buildPosts(events, startedAt) {
       ops: calls.length,
       nFiles: filesTouched.size,
       offset: offsetLabel(p.prompt.timestamp, t0),
+      model: postModel,
       t0,
     };
   });
@@ -170,11 +177,14 @@ function banner(community, model, startedAt) {
 
 /* ------------------------------------ posts ------------------------------------ */
 
-function renderPost(post) {
+function renderPost(post, multiModel) {
   const { title, body } = splitPrompt(post.prompt.text ?? '');
   const longBody = body.length > 500;
   const comments = post.comments.map(c => renderComment(c, post.t0)).join('');
   const nComments = post.comments.length;
+  const modelFlair = multiModel && post.model
+    ? `<span class="flair model-flair mono" data-tip="${escapeHtml(post.model)}">${escapeHtml(shortModel(post.model))}</span>`
+    : '';
 
   return `<article class="post" id="p${post.n}" data-ops="${post.ops}">
   <div class="gutter">
@@ -188,6 +198,7 @@ function renderPost(post) {
       <span class="dotsep"></span>
       <span class="when mono">${escapeHtml(post.offset)}</span>
       ${post.nFiles ? `<span class="flair files-flair">${post.nFiles} ${post.nFiles === 1 ? 'file' : 'files'}</span>` : ''}
+      ${modelFlair}
     </div>
     <h2 class="post-title">${escapeHtml(title)}</h2>
     ${body ? `<div class="post-body${longBody ? ' clamp' : ''}">${escapeHtml(body)}</div>${longBody ? '<button class="readmore" data-expand>Read more</button>' : ''}` : ''}
@@ -251,16 +262,54 @@ function renderRun(r) {
 
 /* ------------------------------------ rail ------------------------------------ */
 
-function aboutCard(posts, toolCalls, files, usage, model, startedAt, endedAt) {
+// USD per million tokens; cache read = 10% of input, cache write = 125%.
+const PRICING = [
+  { match: 'opus',   in: 5, out: 25 },
+  { match: 'sonnet', in: 3, out: 15 },
+  { match: 'haiku',  in: 1, out: 5 },
+];
+
+function pricingFor(model) {
+  const m = String(model ?? '').toLowerCase();
+  return PRICING.find(p => m.includes(p.match)) ?? null;
+}
+
+function costOf(u, model) {
+  const p = pricingFor(model);
+  if (!p || !u) return null;
+  return (
+    (u.input * p.in + u.output * p.out + u.cacheRead * p.in * 0.1 + u.cacheWrite * p.in * 1.25) / 1e6
+  );
+}
+
+function totalCost(usageByModel) {
+  let total = 0;
+  let known = false;
+  for (const [model, u] of Object.entries(usageByModel ?? {})) {
+    const c = costOf(u, model);
+    if (c != null) { total += c; known = true; }
+  }
+  return known ? total : null;
+}
+
+function formatUsd(n) {
+  if (n == null) return null;
+  if (n >= 100) return `$${Math.round(n)}`;
+  if (n >= 1) return `$${n.toFixed(2)}`;
+  return `$${n.toFixed(3)}`;
+}
+
+function aboutCard(posts, toolCalls, files, usage, usageByModel, startedAt, endedAt) {
   const tokens = usage ? usage.input + usage.output + usage.cacheRead + usage.cacheWrite : 0;
+  const cost = totalCost(usageByModel);
   const rows = [
     ['Prompts', posts.length],
     ['Tool calls', toolCalls.length],
     ['Files touched', files.length],
     ['Duration', formatDuration(startedAt, endedAt)],
   ];
-  if (usage?.output) rows.push(['Tokens out', compact(usage.output)]);
-  if (tokens) rows.push(['Tokens total', compact(tokens)]);
+  if (tokens) rows.push(['Tokens', compact(tokens)]);
+  if (cost != null) rows.push(['Est. cost', formatUsd(cost)]);
 
   return `<div class="card">
   <div class="card-head accent-head">About this session</div>
@@ -268,6 +317,36 @@ function aboutCard(posts, toolCalls, files, usage, model, startedAt, endedAt) {
     <div class="about-grid">
       ${rows.map(([l, v]) => `<div class="about-row"><span class="about-v">${escapeHtml(String(v))}</span><span class="about-l">${l}</span></div>`).join('')}
     </div>
+  </div>
+</div>`;
+}
+
+function modelsCard(usageByModel) {
+  const entries = Object.entries(usageByModel ?? {})
+    .filter(([m]) => m !== 'unknown' && !m.includes('synthetic'))
+    .map(([m, u]) => ({
+      model: m,
+      tokens: u.input + u.output + u.cacheRead + u.cacheWrite,
+      out: u.output,
+      cost: costOf(u, m),
+    }))
+    .sort((a, b) => b.tokens - a.tokens);
+  if (!entries.length) return '';
+
+  const rows = entries.map(e => `
+    <div class="mrow" data-tip="${escapeHtml(`${e.model} · ${compact(e.tokens)} tokens (${compact(e.out)} out)${e.cost != null ? ` · ${formatUsd(e.cost)}` : ''}`)}">
+      <span class="mname mono">${escapeHtml(shortModel(e.model))}</span>
+      <span class="mtok mono">${compact(e.tokens)} tok</span>
+      <span class="mcost mono">${e.cost != null ? formatUsd(e.cost) : '—'}</span>
+    </div>`).join('');
+
+  const total = totalCost(usageByModel);
+  return `<div class="card">
+  <div class="card-head">Models &amp; cost</div>
+  <div class="card-pad tight">
+    ${rows}
+    ${total != null ? `<div class="mrow mtotal"><span class="mname">Total</span><span class="mtok"></span><span class="mcost mono">${formatUsd(total)}</span></div>` : ''}
+    <div class="more-note">estimated from token usage at list prices</div>
   </div>
 </div>`;
 }
@@ -350,11 +429,11 @@ function toolsCard(toolCalls) {
 function css() {
   return `
 :root {
-  --bg: #0c0f11;
-  --card: #14181b;
-  --card-2: #191e22;
-  --border: #22282d;
-  --border-hi: #333b42;
+  --bg: #121721;
+  --card: #1a2029;
+  --card-2: #202834;
+  --border: #2a3341;
+  --border-hi: #3b4657;
   --text: #eef1f3;
   --dim: #939ba4;
   --faint: #5f6870;
@@ -367,7 +446,16 @@ function css() {
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 400 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+body {
+  margin: 0; color: var(--text); font: 400 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(900px 500px at 85% -5%, rgba(79,163,255,0.07), transparent 60%),
+    radial-gradient(800px 450px at 0% 0%, rgba(255,69,0,0.06), transparent 55%),
+    radial-gradient(1000px 700px at 50% 115%, rgba(197,138,249,0.05), transparent 60%),
+    linear-gradient(180deg, #141a25, var(--bg) 400px);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
 a { color: var(--blue); text-decoration: none; }
 a:hover { text-decoration: underline; }
 .mono { font-family: var(--mono); }
@@ -417,6 +505,7 @@ a:hover { text-decoration: underline; }
 .when { font-size: 11px; color: var(--faint); }
 .flair { font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
 .files-flair { background: rgba(79,163,255,0.12); color: var(--blue); }
+.model-flair { background: rgba(217,119,87,0.13); color: var(--claude); font-weight: 500; font-size: 10px; }
 .post-title { margin: 7px 0 0; font-size: 16.5px; font-weight: 650; letter-spacing: -0.012em; line-height: 1.35; word-break: break-word; }
 .post-body { margin-top: 7px; font-size: 13px; color: var(--dim); white-space: pre-wrap; word-break: break-word; }
 .post-body.clamp { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
@@ -469,6 +558,14 @@ a:hover { text-decoration: underline; }
 .fspark i { display: block; height: 100%; background: linear-gradient(90deg, var(--orange), #ff8717); border-radius: 3px; }
 .fcount { font-size: 10.5px; color: var(--dim); text-align: right; }
 .more-note { font-size: 11px; color: var(--faint); padding: 6px 4px 2px; }
+
+.mrow { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 10px; align-items: center; padding: 6px 4px; border-radius: 6px; }
+.mrow:hover { background: var(--card-2); }
+.mname { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mtok { font-size: 10.5px; color: var(--dim); }
+.mcost { font-size: 11px; font-weight: 600; color: #6fdc8c; }
+.mtotal { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px; }
+.mtotal .mname { font-weight: 600; font-family: var(--sans); }
 
 .mixbar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 1px; }
 .mixbar i { display: block; height: 100%; min-width: 3px; }
@@ -582,6 +679,12 @@ function compact(n) {
   if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
   if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'k';
   return String(n);
+}
+
+function shortModel(model) {
+  return String(model ?? '')
+    .replace(/^claude-/, '')
+    .replace(/-\d{8}$/, '');
 }
 
 function shortPath(p) {

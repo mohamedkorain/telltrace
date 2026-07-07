@@ -6,6 +6,7 @@ export function parseSession(raw, { sourcePath = null } = {}) {
   let firstTs = null;
   let lastTs = null;
   const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+  const usageByModel = new Map();
 
   for (const line of lines) {
     let entry;
@@ -19,17 +20,23 @@ export function parseSession(raw, { sourcePath = null } = {}) {
       if (!firstTs) firstTs = ts;
       lastTs = ts;
     }
-    if (entry.model && !model) model = entry.model;
-    if (!model && entry.message?.model) model = entry.message.model;
+    const entryModel = entry.message?.model ?? entry.model ?? null;
+    if (entryModel && !model) model = entryModel;
     const u = entry.message?.usage;
     if (u) {
-      usage.input += u.input_tokens ?? 0;
-      usage.output += u.output_tokens ?? 0;
-      usage.cacheRead += u.cache_read_input_tokens ?? 0;
-      usage.cacheWrite += u.cache_creation_input_tokens ?? 0;
+      const add = (target) => {
+        target.input += u.input_tokens ?? 0;
+        target.output += u.output_tokens ?? 0;
+        target.cacheRead += u.cache_read_input_tokens ?? 0;
+        target.cacheWrite += u.cache_creation_input_tokens ?? 0;
+      };
+      add(usage);
+      const key = entryModel ?? 'unknown';
+      if (!usageByModel.has(key)) usageByModel.set(key, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+      add(usageByModel.get(key));
     }
 
-    const norm = normalizeEntry(entry);
+    const norm = normalizeEntry(entry, entryModel);
     for (const e of norm) {
       events.push(e);
       if (e.type === 'tool_call' && e.file) {
@@ -48,10 +55,11 @@ export function parseSession(raw, { sourcePath = null } = {}) {
     events,
     files: [...filesTouched.values()],
     usage,
+    usageByModel: Object.fromEntries(usageByModel),
   };
 }
 
-function normalizeEntry(entry) {
+function normalizeEntry(entry, entryModel) {
   const ts = entry.timestamp ?? entry.time ?? null;
   const out = [];
 
@@ -76,7 +84,7 @@ function normalizeEntry(entry) {
     const blocks = Array.isArray(content) ? content : [{ type: 'text', text: String(content) }];
     for (const block of blocks) {
       if (block.type === 'text' && block.text?.trim()) {
-        out.push({ type: 'assistant_text', timestamp: ts, text: block.text, id: entry.uuid });
+        out.push({ type: 'assistant_text', timestamp: ts, text: block.text, id: entry.uuid, model: entryModel });
       } else if (block.type === 'tool_use') {
         const tool = block.name;
         const args = block.input ?? {};
@@ -89,6 +97,7 @@ function normalizeEntry(entry) {
           file: extractFileFromArgs(tool, args),
           action: extractActionFromTool(tool),
           id: entry.uuid,
+          model: entryModel,
         });
       }
     }
