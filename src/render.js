@@ -1,123 +1,606 @@
-const ACTION_COLOR = {
-  read:   '#5b9bd5',
-  edit:   '#e8a33d',
-  write:  '#d96666',
-  bash:   '#7ab87a',
-  agent:  '#a875d6',
-  search: '#9aa0a6',
-  web:    '#2dbab0',
-  other:  '#888',
+const ACTION = {
+  read:   { color: '#58a6ff', label: 'Read' },
+  edit:   { color: '#f0b429', label: 'Edit' },
+  write:  { color: '#f2707a', label: 'Write' },
+  bash:   { color: '#56d364', label: 'Bash' },
+  agent:  { color: '#bc8cff', label: 'Agent' },
+  search: { color: '#9aa4b2', label: 'Search' },
+  web:    { color: '#39d0c3', label: 'Web' },
+  other:  { color: '#6e7681', label: 'Tool' },
 };
 
-const ACTION_ICON = {
-  read:   '👁',
-  edit:   '✎',
-  write:  '✍',
-  bash:   '$',
-  agent:  '⚙',
-  search: '⌕',
-  web:    '🌐',
-  other:  '•',
+const ICON = {
+  read:   '<path d="M1.5 8s2.4-4.2 6.5-4.2S14.5 8 14.5 8s-2.4 4.2-6.5 4.2S1.5 8 1.5 8Z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="1.9" fill="currentColor"/>',
+  edit:   '<path d="m11.3 2.6 2.1 2.1L5.2 12.9l-2.7.6.6-2.7Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>',
+  write:  '<path d="M3.5 2.5h6l3 3v8h-9Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M5.8 8h4.4M5.8 10.5h4.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
+  bash:   '<path d="m3 4.5 3.2 3.5L3 11.5M8.5 11.5H13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  agent:  '<circle cx="8" cy="8" r="2.3" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6 5 5M11 11l1.4 1.4M3.6 12.4 5 11M11 5l1.4-1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
+  search: '<circle cx="7" cy="7" r="3.8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="m10 10 3.2 3.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  web:    '<circle cx="8" cy="8" r="5.8" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M2.2 8h11.6M8 2.2c1.9 1.8 1.9 9.8 0 11.6M8 2.2c-1.9 1.8-1.9 9.8 0 11.6" fill="none" stroke="currentColor" stroke-width="1.1"/>',
+  other:  '<circle cx="8" cy="8" r="1.8" fill="currentColor"/><circle cx="3.2" cy="8" r="1.4" fill="currentColor" opacity=".55"/><circle cx="12.8" cy="8" r="1.4" fill="currentColor" opacity=".55"/>',
+  prompt: '<path d="M2.5 3.5h11v7h-6l-3 2.8V10.5h-2Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>',
 };
+
+const MAX_FLOW_NODES = 14;
+const MAX_LANES = 18;
+const MAX_BAR_FILES = 10;
 
 export function renderHTML(session) {
   const { events, files, model, startedAt, endedAt, sourcePath } = session;
-  const promptCount = events.filter(e => e.type === 'prompt').length;
-  const toolCount = events.filter(e => e.type === 'tool_call').length;
-  const duration = formatDuration(startedAt, endedAt);
   const groups = groupByPrompt(events);
-
-  const mermaid = buildMermaid(groups);
-  const timelineSvg = buildTimeline(files, events);
-  const groupsHtml = groups.map(renderGroup).join('\n');
+  const toolCalls = events.filter(e => e.type === 'tool_call');
+  const actionCounts = countActions(toolCalls);
+  const duration = formatDuration(startedAt, endedAt);
 
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Telltrace — ${escapeHtml(basename(sourcePath))}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(basename(sourcePath))} · telltrace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;650&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root { color-scheme: light dark; }
-  * { box-sizing: border-box; }
-  body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; margin: 0; padding: 0; background: #0d1117; color: #e6edf3; }
-  header { padding: 24px 32px; border-bottom: 1px solid #30363d; background: linear-gradient(180deg, #161b22, #0d1117); }
-  header h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.01em; }
-  header .sub { color: #8b949e; font-size: 13px; }
-  .stats { display: flex; gap: 24px; margin-top: 14px; flex-wrap: wrap; }
-  .stat { display: flex; flex-direction: column; }
-  .stat .v { font-size: 20px; font-weight: 600; }
-  .stat .l { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; }
-  main { padding: 24px 32px; max-width: 1400px; }
-  section { margin-bottom: 40px; }
-  section h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: #8b949e; margin: 0 0 12px; }
-  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 18px; }
-  .group { margin-bottom: 16px; }
-  .group .prompt { background: #1f2733; border: 1px solid #30363d; border-radius: 8px; padding: 14px 16px; margin-bottom: 8px; }
-  .group .prompt .label { font-size: 11px; text-transform: uppercase; color: #8b949e; letter-spacing: 0.08em; margin-bottom: 4px; }
-  .group .prompt .text { white-space: pre-wrap; word-break: break-word; font-size: 14px; }
-  .calls { margin-left: 16px; border-left: 2px solid #30363d; padding-left: 14px; }
-  .call { display: flex; gap: 10px; padding: 6px 0; align-items: flex-start; font-size: 13px; }
-  .call .icon { width: 22px; height: 22px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; color: white; flex-shrink: 0; font-size: 12px; }
-  .call .body { min-width: 0; flex: 1; }
-  .call .tool { font-weight: 600; }
-  .call .arg { color: #8b949e; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-all; }
-  .file-strip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-  details summary { cursor: pointer; padding: 4px 0; color: #8b949e; font-size: 12px; }
-  details[open] summary { color: #e6edf3; }
-  pre { background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 10px; overflow-x: auto; font-size: 12px; max-height: 300px; }
-  .timeline-wrap { overflow-x: auto; }
-  .mermaid { background: #0d1117; padding: 12px; border-radius: 8px; overflow: auto; }
-  svg text { fill: #e6edf3; }
-  a { color: #58a6ff; }
-  footer { padding: 24px 32px; color: #6e7681; font-size: 12px; border-top: 1px solid #30363d; }
+${css()}
 </style>
 </head>
 <body>
-<header>
-  <h1>Telltrace</h1>
-  <div class="sub">${escapeHtml(basename(sourcePath))} ${model ? `· <code>${escapeHtml(model)}</code>` : ''}</div>
-  <div class="stats">
-    <div class="stat"><div class="v">${promptCount}</div><div class="l">Prompts</div></div>
-    <div class="stat"><div class="v">${toolCount}</div><div class="l">Tool calls</div></div>
-    <div class="stat"><div class="v">${files.length}</div><div class="l">Files touched</div></div>
-    <div class="stat"><div class="v">${duration}</div><div class="l">Duration</div></div>
-  </div>
-</header>
-<main>
-  <section>
-    <h2>Flow</h2>
-    <div class="card mermaid"><pre class="mermaid-src">${mermaid}</pre></div>
-  </section>
-
-  <section>
-    <h2>File touches</h2>
-    <div class="card timeline-wrap">${timelineSvg}</div>
-  </section>
-
-  <section>
-    <h2>Session</h2>
-    ${groupsHtml}
-  </section>
-</main>
-<footer>
-  Rendered by <a href="https://github.com/telltrace-dev">telltrace</a> · open source agent session viewer.
-</footer>
-<script type="module">
-  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-  mermaid.initialize({ startOnLoad: false, theme: 'dark', flowchart: { curve: 'basis' } });
-  for (const el of document.querySelectorAll('.mermaid')) {
-    const src = el.querySelector('.mermaid-src').textContent;
-    try {
-      const { svg } = await mermaid.render('m-' + Math.floor(performance.now()), src);
-      el.innerHTML = svg;
-    } catch (e) {
-      el.innerHTML = '<div style="color:#f85149">mermaid render failed: ' + e.message + '</div>';
-    }
-  }
+${topbar(sourcePath, model)}
+<div class="shell">
+  ${sidebar(groups)}
+  <main>
+    ${hero(groups, toolCalls, files, duration, startedAt, actionCounts)}
+    ${sectionActivity(events, toolCalls, groups)}
+    ${sectionFlow(groups)}
+    ${sectionFiles(files, toolCalls, events, groups)}
+    ${sectionTranscript(groups)}
+    <footer>
+      <span>Generated by <a href="https://github.com/mohamedkorain/telltrace">telltrace</a></span>
+      <span class="foot-sep"></span>
+      <span>MIT — open-source agent session viewer</span>
+    </footer>
+  </main>
+</div>
+<div class="tip" id="tip" hidden></div>
+<script>
+${js()}
 </script>
 </body>
 </html>`;
 }
+
+/* ---------------------------------- layout --------------------------------- */
+
+function topbar(sourcePath, model) {
+  return `<header class="topbar">
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="1" y="1" width="22" height="22" rx="6" fill="url(#mg)"/>
+      <path d="M7 12h3.2l1.6-3.6 2 7.2 1.6-3.6H17" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+      <defs><linearGradient id="mg" x1="0" y1="0" x2="24" y2="24"><stop stop-color="#7c8cf8"/><stop offset="1" stop-color="#b16dff"/></linearGradient></defs>
+    </svg>
+    <span class="brand-name">telltrace</span>
+  </div>
+  <div class="topbar-meta">
+    <span class="mono dim">${escapeHtml(basename(sourcePath))}</span>
+    ${model ? `<span class="model-chip mono">${escapeHtml(model)}</span>` : ''}
+  </div>
+</header>`;
+}
+
+function sidebar(groups) {
+  const items = groups.map((g, i) => `
+    <a class="nav-item" href="#p${i + 1}">
+      <span class="nav-n mono">P${i + 1}</span>
+      <span class="nav-t">${escapeHtml(truncate(firstLine(g.prompt.text ?? ''), 44))}</span>
+      <span class="nav-c mono">${g.calls.length}</span>
+    </a>`).join('');
+  return `<nav class="side">
+  <div class="side-head">Prompts</div>
+  <div class="side-list">${items}</div>
+</nav>`;
+}
+
+function hero(groups, toolCalls, files, duration, startedAt, actionCounts) {
+  const chips = Object.entries(actionCounts)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => `<span class="chip"><i style="background:${ACTION[k].color}"></i>${ACTION[k].label}<b>${n}</b></span>`)
+    .join('');
+  return `<section class="hero">
+  <h1>Session replay</h1>
+  <div class="hero-sub">${startedAt ? escapeHtml(formatDate(startedAt)) : ''}</div>
+  <div class="stats">
+    ${stat(groups.length, 'Prompts')}
+    ${stat(toolCalls.length, 'Tool calls')}
+    ${stat(files.length, 'Files touched')}
+    ${stat(duration, 'Duration')}
+  </div>
+  <div class="chips">${chips}</div>
+</section>`;
+}
+
+function stat(v, l) {
+  return `<div class="stat"><div class="v">${escapeHtml(String(v))}</div><div class="l">${l}</div></div>`;
+}
+
+/* --------------------------------- activity -------------------------------- */
+
+function sectionActivity(events, toolCalls, groups) {
+  if (toolCalls.length === 0) return '';
+  const spark = buildSpark(toolCalls, groups);
+  return `<section id="activity">
+  <div class="sec-head"><h2>Activity</h2><span class="hint">tool-call intensity across the session</span></div>
+  <div class="card pad">${spark}</div>
+</section>`;
+}
+
+function buildSpark(toolCalls, groups) {
+  const W = 1000, H = 96, PAD = 2;
+  const times = toolCalls.map(c => Date.parse(c.timestamp)).filter(Number.isFinite);
+  const useTime = times.length >= Math.max(2, toolCalls.length * 0.5);
+  const buckets = 80;
+  const counts = new Array(buckets).fill(0);
+  const byAction = new Array(buckets).fill(null).map(() => ({}));
+
+  let t0 = 0, t1 = 1;
+  if (useTime) { t0 = Math.min(...times); t1 = Math.max(...times); if (t1 === t0) t1 = t0 + 1; }
+
+  toolCalls.forEach((c, i) => {
+    let f;
+    if (useTime && Number.isFinite(Date.parse(c.timestamp))) f = (Date.parse(c.timestamp) - t0) / (t1 - t0);
+    else f = i / Math.max(toolCalls.length - 1, 1);
+    const b = Math.min(buckets - 1, Math.floor(f * buckets));
+    counts[b]++;
+    byAction[b][c.action] = (byAction[b][c.action] ?? 0) + 1;
+  });
+
+  const max = Math.max(...counts, 1);
+  const bw = (W - PAD * 2) / buckets;
+  let bars = '';
+  counts.forEach((n, i) => {
+    if (n === 0) return;
+    const h = Math.max(3, (n / max) * (H - 14));
+    const x = PAD + i * bw;
+    const dominant = Object.entries(byAction[i]).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'other';
+    const color = ACTION[dominant]?.color ?? ACTION.other.color;
+    bars += `<rect x="${x.toFixed(1)}" y="${(H - h).toFixed(1)}" width="${Math.max(bw - 2, 2).toFixed(1)}" height="${h.toFixed(1)}" rx="1.5" fill="${color}" opacity="0.75" data-tip="${escapeHtml(`${n} calls · mostly ${ACTION[dominant]?.label ?? 'tools'}`)}"/>`;
+  });
+
+  let markers = '';
+  if (useTime) {
+    groups.forEach((g, gi) => {
+      const t = Date.parse(g.prompt?.timestamp);
+      if (!Number.isFinite(t)) return;
+      const x = PAD + ((t - t0) / (t1 - t0)) * (W - PAD * 2);
+      markers += `<line x1="${x.toFixed(1)}" y1="4" x2="${x.toFixed(1)}" y2="${H}" stroke="#67d1fb" stroke-width="1" stroke-dasharray="2 3" opacity="0.5" data-tip="${escapeHtml(`P${gi + 1} — ${truncate(firstLine(g.prompt.text ?? ''), 60)}`)}"/>`;
+    });
+  }
+
+  const startLabel = useTime ? formatClock(t0) : '';
+  const endLabel = useTime ? formatClock(t1) : '';
+  return `<svg class="spark" viewBox="0 0 ${W} ${H + 20}" preserveAspectRatio="none" aria-label="activity">
+  ${markers}${bars}
+  <text x="${PAD}" y="${H + 15}" class="axis-t">${startLabel}</text>
+  <text x="${W - PAD}" y="${H + 15}" class="axis-t" text-anchor="end">${endLabel}</text>
+</svg>`;
+}
+
+/* ----------------------------------- flow ---------------------------------- */
+
+function sectionFlow(groups) {
+  const rows = groups.map((g, gi) => flowRow(g, gi)).join('');
+  return `<section id="flow">
+  <div class="sec-head"><h2>Flow</h2><span class="hint">what each prompt triggered — consecutive identical steps are collapsed</span></div>
+  <div class="flow">${rows}</div>
+</section>`;
+}
+
+function flowRow(g, gi) {
+  const runs = compressRuns(g.calls);
+  const visible = runs.slice(0, MAX_FLOW_NODES);
+  const hidden = runs.slice(MAX_FLOW_NODES);
+
+  const node = (r) => {
+    const cfg = ACTION[r.action] ?? ACTION.other;
+    const fileLabel = r.files.size === 1 ? basename([...r.files][0]) : r.files.size > 1 ? `${r.files.size} files` : '';
+    const tipParts = [`${r.tool}${r.count > 1 ? ` ×${r.count}` : ''}`];
+    if (r.files.size) tipParts.push([...r.files].map(basename).slice(0, 6).join(', ') + (r.files.size > 6 ? '…' : ''));
+    if (r.detail) tipParts.push(r.detail);
+    return `<span class="fnode" style="--c:${cfg.color}" data-tip="${escapeHtml(tipParts.join(' · '))}">
+      <svg viewBox="0 0 16 16">${ICON[r.action] ?? ICON.other}</svg>
+      <span class="fnode-t">${escapeHtml(r.tool)}</span>
+      ${r.count > 1 ? `<span class="fnode-n">×${r.count}</span>` : ''}
+      ${fileLabel ? `<span class="fnode-f mono">${escapeHtml(truncate(fileLabel, 24))}</span>` : ''}
+    </span>`;
+  };
+
+  const conn = '<span class="fconn" aria-hidden="true"></span>';
+  const chain = visible.map(node).join(conn);
+  const more = hidden.length
+    ? `${conn}<button class="fmore" data-more>+${hidden.length} more</button><span class="fhidden" hidden>${conn}${hidden.map(node).join(conn)}</span>`
+    : '';
+
+  return `<div class="frow">
+  <a class="fprompt" href="#p${gi + 1}" data-tip="${escapeHtml(truncate(firstLine(g.prompt.text ?? ''), 90))}">
+    <svg viewBox="0 0 16 16">${ICON.prompt}</svg>
+    <span class="mono">P${gi + 1}</span>
+    <span class="fprompt-t">${escapeHtml(truncate(firstLine(g.prompt.text ?? ''), 46))}</span>
+  </a>
+  <div class="fchain">${g.calls.length ? conn + chain + more : '<span class="fempty">no tool calls</span>'}</div>
+</div>`;
+}
+
+function compressRuns(calls) {
+  const runs = [];
+  for (const c of calls) {
+    const last = runs[runs.length - 1];
+    if (last && last.tool === c.tool && last.action === c.action) {
+      last.count++;
+      if (c.file) last.files.add(c.file);
+    } else {
+      runs.push({
+        tool: c.tool,
+        action: c.action ?? 'other',
+        count: 1,
+        files: new Set(c.file ? [c.file] : []),
+        detail: c.action === 'bash' ? truncate(c.args?.command ?? '', 80) : '',
+      });
+    }
+  }
+  return runs;
+}
+
+/* ---------------------------------- files ---------------------------------- */
+
+function sectionFiles(files, toolCalls, events, groups) {
+  if (files.length === 0) return '';
+  const bars = buildFileBars(files);
+  const lanes = buildLanes(toolCalls, groups);
+  return `<section id="files">
+  <div class="sec-head"><h2>Files</h2><span class="hint">most-touched files and when each was hit</span></div>
+  <div class="card pad">${bars}</div>
+  <div class="card pad" style="margin-top:12px">${lanes}</div>
+</section>`;
+}
+
+function buildFileBars(files) {
+  const ranked = [...files]
+    .map(f => {
+      const byAction = {};
+      for (const e of f.events) byAction[e.action] = (byAction[e.action] ?? 0) + 1;
+      return { file: f.file, total: f.events.length, byAction };
+    })
+    .sort((a, b) => b.total - a.total)
+    .slice(0, MAX_BAR_FILES);
+  const max = ranked[0]?.total ?? 1;
+  const rows = ranked.map(r => {
+    const segs = Object.entries(r.byAction)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => `<i style="flex:${n};background:${(ACTION[k] ?? ACTION.other).color}" data-tip="${escapeHtml(`${(ACTION[k] ?? ACTION.other).label} ×${n}`)}"></i>`)
+      .join('');
+    return `<div class="fbar">
+      <span class="fbar-name mono" data-tip="${escapeHtml(r.file)}">${escapeHtml(truncate(shortPath(r.file), 42))}</span>
+      <span class="fbar-track"><span class="fbar-fill" style="width:${((r.total / max) * 100).toFixed(1)}%">${segs}</span></span>
+      <span class="fbar-n mono">${r.total}</span>
+    </div>`;
+  }).join('');
+  const dropped = files.length - ranked.length;
+  return rows + (dropped > 0 ? `<div class="dim small" style="margin-top:8px">+${dropped} more files</div>` : '');
+}
+
+function buildLanes(toolCalls, groups) {
+  const fileCalls = toolCalls.filter(c => c.file);
+  if (fileCalls.length === 0) return '<div class="dim small">No file-level activity.</div>';
+
+  const byFile = new Map();
+  for (const c of fileCalls) {
+    if (!byFile.has(c.file)) byFile.set(c.file, []);
+    byFile.get(c.file).push(c);
+  }
+  const ranked = [...byFile.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, MAX_LANES);
+  const order = new Map();
+  toolCalls.forEach((c, i) => order.set(c, i));
+  const N = toolCalls.length;
+
+  const W = 1000, laneH = 26, labelW = 260, PADR = 8;
+  const H = ranked.length * laneH;
+
+  let svg = `<svg class="lanes" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${ranked.length * 26}px">`;
+  ranked.forEach(([file, calls], i) => {
+    const y = i * laneH;
+    const cy = y + laneH / 2;
+    if (i % 2 === 1) svg += `<rect x="0" y="${y}" width="${W}" height="${laneH}" fill="rgba(255,255,255,0.015)"/>`;
+    svg += `<line x1="${labelW}" y1="${cy}" x2="${W - PADR}" y2="${cy}" stroke="#1c1f27" stroke-width="1"/>`;
+    for (const c of calls) {
+      const f = order.get(c) / Math.max(N - 1, 1);
+      const x = labelW + f * (W - labelW - PADR - 8);
+      const cfg = ACTION[c.action] ?? ACTION.other;
+      svg += `<rect x="${x.toFixed(1)}" y="${cy - 5}" width="8" height="10" rx="2.5" fill="${cfg.color}" opacity="0.9" data-tip="${escapeHtml(`${c.tool} · ${basename(file)}${c.timestamp ? ` · ${formatClock(Date.parse(c.timestamp))}` : ''}`)}"/>`;
+    }
+  });
+  svg += '</svg>';
+
+  const labels = ranked.map(([file]) => `<div class="lane-lab mono" data-tip="${escapeHtml(file)}">${escapeHtml(truncate(shortPath(file), 34))}</div>`).join('');
+  const dropped = byFile.size - ranked.length;
+  const legend = Object.entries(ACTION)
+    .filter(([k]) => fileCalls.some(c => (c.action ?? 'other') === k))
+    .map(([, cfg]) => `<span class="chip small"><i style="background:${cfg.color}"></i>${cfg.label}</span>`)
+    .join('');
+
+  return `<div class="lanes-wrap">
+  <div class="lanes-labels" style="height:${ranked.length * 26}px">${labels}</div>
+  <div class="lanes-svg">${svg}</div>
+</div>
+<div class="lanes-foot">
+  <div class="chips">${legend}</div>
+  ${dropped > 0 ? `<span class="dim small">+${dropped} more files</span>` : ''}
+</div>`;
+}
+
+/* -------------------------------- transcript ------------------------------- */
+
+function sectionTranscript(groups) {
+  const cards = groups.map((g, i) => transcriptCard(g, i)).join('');
+  return `<section id="transcript">
+  <div class="sec-head"><h2>Transcript</h2><span class="hint">${groups.length} prompts, expanded</span></div>
+  ${cards}
+</section>`;
+}
+
+function transcriptCard(g, i) {
+  const text = g.prompt.text ?? '';
+  const long = text.length > 360;
+  const calls = g.calls.map(c => {
+    const cfg = ACTION[c.action] ?? ACTION.other;
+    const arg = summarizeArgs(c.tool, c.args);
+    return `<div class="tcall">
+      <span class="tcall-i" style="--c:${cfg.color}"><svg viewBox="0 0 16 16">${ICON[c.action] ?? ICON.other}</svg></span>
+      <span class="tcall-tool">${escapeHtml(c.tool)}</span>
+      ${arg ? `<span class="tcall-arg mono" title="${escapeHtml(arg)}">${escapeHtml(truncate(arg, 96))}</span>` : ''}
+    </div>`;
+  }).join('');
+
+  return `<article class="tcard" id="p${i + 1}">
+  <div class="tcard-head">
+    <span class="tbadge mono">P${i + 1}</span>
+    <span class="tmeta mono">${g.prompt.timestamp ? escapeHtml(formatDate(g.prompt.timestamp)) + ' · ' : ''}${g.calls.length} ${g.calls.length === 1 ? 'call' : 'calls'}</span>
+  </div>
+  <div class="tprompt${long ? ' clamp' : ''}">${escapeHtml(text)}</div>
+  ${long ? '<button class="texpand" data-expand>Show more</button>' : ''}
+  ${calls ? `<div class="tcalls">${calls}</div>` : ''}
+</article>`;
+}
+
+/* ----------------------------------- css ----------------------------------- */
+
+function css() {
+  return `
+:root {
+  --bg: #0a0b0e;
+  --panel: #101218;
+  --panel-2: #151822;
+  --border: #1f2330;
+  --border-hi: #2c3243;
+  --text: #e9ecf2;
+  --dim: #8f96a8;
+  --faint: #5b6274;
+  --accent: #7c8cf8;
+  --prompt: #67d1fb;
+  --r: 12px;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 14px/1.55 var(--sans); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.mono { font-family: var(--mono); }
+.dim { color: var(--dim); }
+.small { font-size: 12px; }
+
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; height: 52px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(14px) saturate(1.4);
+  border-bottom: 1px solid var(--border);
+}
+.brand { display: flex; align-items: center; gap: 9px; }
+.mark { width: 24px; height: 24px; }
+.brand-name { font-weight: 650; font-size: 14px; letter-spacing: -0.01em; }
+.topbar-meta { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.model-chip { font-size: 11px; padding: 3px 9px; border: 1px solid var(--border-hi); border-radius: 999px; color: var(--dim); background: var(--panel); }
+
+.shell { display: grid; grid-template-columns: 250px minmax(0, 1fr); max-width: 1440px; margin: 0 auto; }
+
+.side {
+  position: sticky; top: 52px; height: calc(100vh - 52px);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+}
+.side-head { padding: 20px 20px 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); }
+.side-list { overflow-y: auto; padding: 0 10px 20px; }
+.nav-item {
+  display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: baseline;
+  padding: 7px 10px; border-radius: 8px; color: var(--dim); font-size: 12.5px;
+}
+.nav-item:hover { background: var(--panel-2); color: var(--text); text-decoration: none; }
+.nav-n { font-size: 11px; color: var(--prompt); }
+.nav-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-c { font-size: 10.5px; color: var(--faint); }
+
+main { padding: 36px 40px 80px; min-width: 0; }
+section { margin-bottom: 44px; }
+.sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.sec-head h2 { margin: 0; font-size: 13px; font-weight: 650; letter-spacing: -0.005em; }
+.hint { font-size: 12px; color: var(--faint); }
+
+.hero { margin-bottom: 40px; }
+.hero h1 { margin: 0 0 4px; font-size: 26px; font-weight: 650; letter-spacing: -0.022em; }
+.hero-sub { color: var(--dim); font-size: 13px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 200px)); gap: 10px; margin-top: 22px; }
+.stat {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--border); border-radius: var(--r);
+  padding: 14px 16px 12px;
+}
+.stat .v { font-size: 21px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.stat .l { font-size: 11px; color: var(--dim); margin-top: 1px; }
+.chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12px; color: var(--dim);
+  padding: 4px 11px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel);
+}
+.chip i { width: 7px; height: 7px; border-radius: 50%; }
+.chip b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.chip.small { padding: 2px 9px; font-size: 11px; }
+
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); }
+.pad { padding: 18px; }
+
+.spark { width: 100%; height: 116px; display: block; }
+.axis-t { fill: var(--faint); font-size: 11px; font-family: var(--mono); }
+
+.flow { display: flex; flex-direction: column; gap: 10px; }
+.frow {
+  display: flex; align-items: center; gap: 0;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 10px 14px; overflow-x: auto;
+}
+.frow::-webkit-scrollbar { height: 6px; }
+.frow::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+.fprompt {
+  display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0;
+  padding: 7px 12px; border-radius: 9px;
+  background: rgba(103,209,251,0.08); border: 1px solid rgba(103,209,251,0.25);
+  color: var(--prompt); font-size: 12.5px; font-weight: 500;
+}
+.fprompt:hover { background: rgba(103,209,251,0.14); text-decoration: none; }
+.fprompt svg { width: 13px; height: 13px; flex-shrink: 0; }
+.fprompt .mono { font-size: 11px; opacity: 0.85; }
+.fprompt-t { color: var(--text); font-weight: 450; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fchain { display: inline-flex; align-items: center; flex-shrink: 0; }
+.fconn { width: 22px; height: 1px; background: linear-gradient(90deg, var(--border-hi), var(--faint)); position: relative; flex-shrink: 0; }
+.fconn::after { content: ''; position: absolute; right: 0; top: -2.5px; border-left: 5px solid var(--faint); border-top: 3px solid transparent; border-bottom: 3px solid transparent; }
+.fnode {
+  display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
+  padding: 6px 11px; border-radius: 9px;
+  background: color-mix(in srgb, var(--c) 9%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--c) 32%, transparent);
+  font-size: 12px; cursor: default;
+  transition: border-color .12s;
+}
+.fnode:hover { border-color: color-mix(in srgb, var(--c) 65%, transparent); }
+.fnode svg { width: 13px; height: 13px; color: var(--c); flex-shrink: 0; }
+.fnode-t { font-weight: 550; }
+.fnode-n { font-size: 10.5px; color: var(--c); font-weight: 600; font-family: var(--mono); }
+.fnode-f { font-size: 10.5px; color: var(--dim); }
+.fempty { color: var(--faint); font-size: 12px; padding-left: 12px; }
+.fmore {
+  flex-shrink: 0; font: 500 11.5px var(--sans); color: var(--dim);
+  background: var(--panel-2); border: 1px dashed var(--border-hi); border-radius: 9px;
+  padding: 6px 11px; cursor: pointer;
+}
+.fmore:hover { color: var(--text); border-color: var(--faint); }
+.fhidden { display: contents; }
+
+.fbar { display: grid; grid-template-columns: 300px 1fr 44px; gap: 12px; align-items: center; padding: 4px 0; }
+.fbar-name { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fbar-track { height: 14px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+.fbar-fill { display: flex; height: 100%; border-radius: 4px; overflow: hidden; min-width: 8px; }
+.fbar-fill i { display: block; height: 100%; }
+.fbar-n { font-size: 11px; color: var(--faint); text-align: right; font-variant-numeric: tabular-nums; }
+
+.lanes-wrap { display: grid; grid-template-columns: 260px 1fr; }
+.lanes-labels { display: flex; flex-direction: column; }
+.lane-lab { height: 26px; display: flex; align-items: center; font-size: 11px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 12px; }
+.lanes-svg { min-width: 0; }
+.lanes { width: 100%; display: block; }
+.lanes-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; gap: 12px; flex-wrap: wrap; }
+
+.tcard { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); padding: 16px 18px; margin-bottom: 10px; scroll-margin-top: 70px; }
+.tcard:target { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 24px -8px color-mix(in srgb, var(--accent) 50%, transparent); }
+.tcard-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.tbadge {
+  font-size: 11px; font-weight: 500; color: var(--prompt);
+  background: rgba(103,209,251,0.09); border: 1px solid rgba(103,209,251,0.22);
+  padding: 2px 8px; border-radius: 6px;
+}
+.tmeta { font-size: 11px; color: var(--faint); }
+.tprompt { white-space: pre-wrap; word-break: break-word; font-size: 13.5px; }
+.tprompt.clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.texpand { background: none; border: none; padding: 6px 0 0; color: var(--accent); font: 500 12px var(--sans); cursor: pointer; }
+.tcalls { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px; }
+.tcall { display: flex; align-items: center; gap: 9px; padding: 3px 0; min-width: 0; }
+.tcall-i {
+  width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--c) 12%, transparent); color: var(--c);
+}
+.tcall-i svg { width: 11px; height: 11px; }
+.tcall-tool { font-size: 12px; font-weight: 550; flex-shrink: 0; }
+.tcall-arg { font-size: 11px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+footer { display: flex; align-items: center; gap: 10px; color: var(--faint); font-size: 12px; padding-top: 8px; }
+.foot-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--faint); }
+
+.tip {
+  position: fixed; z-index: 50; pointer-events: none;
+  max-width: 380px; padding: 7px 11px;
+  background: #1b1f2a; border: 1px solid var(--border-hi); border-radius: 8px;
+  font-size: 12px; line-height: 1.45; color: var(--text);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+}
+
+@media (max-width: 980px) {
+  .shell { grid-template-columns: 1fr; }
+  .side { display: none; }
+  main { padding: 24px 18px 60px; }
+  .fbar { grid-template-columns: 140px 1fr 40px; }
+  .lanes-wrap { grid-template-columns: 150px 1fr; }
+}
+`;
+}
+
+/* ------------------------------------ js ----------------------------------- */
+
+function js() {
+  return `
+const tip = document.getElementById('tip');
+let tipEl = null;
+document.addEventListener('mouseover', e => {
+  const t = e.target.closest('[data-tip]');
+  if (t && t !== tipEl) { tipEl = t; tip.textContent = t.getAttribute('data-tip'); tip.hidden = false; }
+  else if (!t && tipEl) { tipEl = null; tip.hidden = true; }
+});
+document.addEventListener('mousemove', e => {
+  if (tip.hidden) return;
+  const pad = 14;
+  let x = e.clientX + pad, y = e.clientY + pad;
+  const r = tip.getBoundingClientRect();
+  if (x + r.width > innerWidth - 8) x = e.clientX - r.width - pad;
+  if (y + r.height > innerHeight - 8) y = e.clientY - r.height - pad;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+});
+document.addEventListener('click', e => {
+  const more = e.target.closest('[data-more]');
+  if (more) { more.nextElementSibling.hidden = false; more.remove(); return; }
+  const ex = e.target.closest('[data-expand]');
+  if (ex) {
+    const p = ex.previousElementSibling;
+    p.classList.toggle('clamp');
+    ex.textContent = p.classList.contains('clamp') ? 'Show more' : 'Show less';
+  }
+});
+`;
+}
+
+/* --------------------------------- helpers --------------------------------- */
 
 function groupByPrompt(events) {
   const groups = [];
@@ -135,115 +618,39 @@ function groupByPrompt(events) {
     groups.push({
       prompt: { text: '(no user prompt captured)', timestamp: null },
       calls: events.filter(e => e.type === 'tool_call'),
-      texts: events.filter(e => e.type === 'assistant_text'),
+      texts: [],
     });
   }
   return groups;
 }
 
-function buildMermaid(groups) {
-  const lines = ['flowchart TD'];
-  groups.forEach((g, gi) => {
-    const pid = `P${gi}`;
-    const label = sanitizeMermaid(truncate(g.prompt.text ?? '(prompt)', 60));
-    lines.push(`  ${pid}["${label}"]:::prompt`);
-    g.calls.forEach((c, ci) => {
-      const cid = `C${gi}_${ci}`;
-      const file = c.file ? ` ${basename(c.file)}` : '';
-      const node = sanitizeMermaid(`${c.tool}${file}`.slice(0, 50));
-      lines.push(`  ${cid}["${node}"]:::${c.action}`);
-      lines.push(`  ${pid} --> ${cid}`);
-    });
-  });
-  lines.push('  classDef prompt fill:#1f6feb,stroke:#1f6feb,color:#fff');
-  for (const [action, color] of Object.entries(ACTION_COLOR)) {
-    lines.push(`  classDef ${action} fill:${color},stroke:${color},color:#fff`);
-  }
-  return lines.join('\n');
-}
-
-function buildTimeline(files, events) {
-  if (files.length === 0) {
-    return '<div style="color:#8b949e;padding:20px;text-align:center">No file activity in this session.</div>';
-  }
-  const sorted = [...files].sort((a, b) => b.events.length - a.events.length);
-  const rowH = 22;
-  const labelW = 240;
-  const padding = 16;
-  const calls = events.filter(e => e.type === 'tool_call' && e.file);
-  const w = Math.max(800, calls.length * 18 + labelW + padding * 2);
-  const h = sorted.length * rowH + padding * 2 + 30;
-  const x0 = labelW + padding;
-  const xStep = (w - x0 - padding) / Math.max(calls.length, 1);
-  const callIndex = new Map();
-  calls.forEach((c, i) => callIndex.set(c, i));
-
-  let svg = `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg" style="display:block;">`;
-  svg += `<rect width="${w}" height="${h}" fill="#0d1117"/>`;
-  sorted.forEach((file, i) => {
-    const y = padding + i * rowH + rowH / 2;
-    const label = truncate(file.file, 36);
-    svg += `<text x="${labelW + padding - 8}" y="${y + 4}" text-anchor="end" font-family="ui-monospace,Menlo,monospace" font-size="11" fill="#8b949e">${escapeXml(label)}</text>`;
-    svg += `<line x1="${x0}" y1="${y}" x2="${w - padding}" y2="${y}" stroke="#21262d" stroke-width="1"/>`;
-    for (const ev of file.events) {
-      const matching = calls.find(c => c.file === file.file && c.timestamp === ev.ts && c.tool === ev.tool);
-      const idx = matching ? callIndex.get(matching) : 0;
-      const cx = x0 + idx * xStep + xStep / 2;
-      const color = ACTION_COLOR[ev.action] ?? '#888';
-      svg += `<circle cx="${cx}" cy="${y}" r="5" fill="${color}"><title>${escapeXml(ev.tool)} — ${escapeXml(ev.ts ?? '')}</title></circle>`;
-    }
-  });
-  const legendY = h - 18;
-  let lx = labelW + padding;
-  for (const [action, color] of Object.entries(ACTION_COLOR)) {
-    svg += `<circle cx="${lx}" cy="${legendY}" r="4" fill="${color}"/>`;
-    svg += `<text x="${lx + 8}" y="${legendY + 4}" font-size="10" fill="#8b949e">${action}</text>`;
-    lx += 60;
-  }
-  svg += '</svg>';
-  return svg;
-}
-
-function renderGroup(g, i) {
-  const promptText = escapeHtml(g.prompt.text ?? '');
-  const calls = g.calls.map(renderCall).join('');
-  return `<div class="group">
-    <div class="prompt">
-      <div class="label">Prompt ${i + 1}${g.prompt.timestamp ? ` · ${escapeHtml(g.prompt.timestamp)}` : ''}</div>
-      <div class="text">${promptText}</div>
-    </div>
-    <div class="calls">${calls || '<div style="color:#6e7681;font-size:12px">no tool calls</div>'}</div>
-  </div>`;
-}
-
-function renderCall(c) {
-  const color = ACTION_COLOR[c.action] ?? '#888';
-  const icon = ACTION_ICON[c.action] ?? '•';
-  const argSummary = summarizeArgs(c.tool, c.args);
-  return `<div class="call">
-    <span class="icon" style="background:${color}">${icon}</span>
-    <div class="body">
-      <span class="tool">${escapeHtml(c.tool)}</span>
-      <span class="arg">${escapeHtml(argSummary)}</span>
-    </div>
-  </div>`;
+function countActions(toolCalls) {
+  const out = Object.fromEntries(Object.keys(ACTION).map(k => [k, 0]));
+  for (const c of toolCalls) out[c.action ?? 'other']++;
+  return out;
 }
 
 function summarizeArgs(tool, args) {
   if (!args || typeof args !== 'object') return '';
   if (args.file_path) return args.file_path;
   if (args.path) return args.path;
-  if (args.command) return truncate(args.command, 120);
+  if (args.command) return args.command;
   if (args.pattern) return args.pattern;
-  if (args.query) return truncate(args.query, 100);
-  if (args.prompt) return truncate(args.prompt, 100);
+  if (args.query) return args.query;
+  if (args.prompt) return args.prompt;
   if (args.url) return args.url;
   const first = Object.entries(args)[0];
-  return first ? `${first[0]}=${truncate(String(first[1]), 80)}` : '';
+  return first ? `${first[0]}=${String(first[1])}` : '';
 }
 
-function sanitizeMermaid(s) {
-  return String(s).replace(/["`]/g, "'").replace(/[\n\r]/g, ' ');
+function firstLine(s) {
+  return String(s ?? '').split('\n')[0].trim();
+}
+
+function shortPath(p) {
+  const parts = String(p).split('/').filter(Boolean);
+  if (parts.length <= 3) return p;
+  return '…/' + parts.slice(-3).join('/');
 }
 
 function truncate(s, n) {
@@ -255,13 +662,21 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function escapeXml(s) {
-  return escapeHtml(s);
-}
-
 function basename(p) {
   if (!p) return 'session';
   return String(p).split('/').pop();
+}
+
+function formatDate(ts) {
+  const d = new Date(ts);
+  if (isNaN(d)) return String(ts);
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function formatClock(t) {
+  const d = new Date(t);
+  if (isNaN(d)) return '';
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDuration(start, end) {
@@ -271,8 +686,7 @@ function formatDuration(start, end) {
   const s = Math.floor(ms / 1000);
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
-  const r = s % 60;
-  if (m < 60) return `${m}m ${r}s`;
+  if (m < 60) return `${m}m ${s % 60}s`;
   const h = Math.floor(m / 60);
   return `${h}h ${m % 60}m`;
 }
