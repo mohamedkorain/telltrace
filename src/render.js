@@ -20,8 +20,6 @@ const ICON = {
   other:  '<circle cx="8" cy="8" r="1.8" fill="currentColor"/><circle cx="3.2" cy="8" r="1.4" fill="currentColor" opacity=".55"/><circle cx="12.8" cy="8" r="1.4" fill="currentColor" opacity=".55"/>',
 };
 
-const UP = '<path d="M8 2.5 13.5 9h-3.4v4.5H5.9V9H2.5Z"/>';
-
 export function renderHTML(session) {
   const { events, files, model, startedAt, endedAt, sourcePath, usage, usageByModel } = session;
   const posts = buildPosts(events, startedAt);
@@ -35,7 +33,7 @@ export function renderHTML(session) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>t/${escapeHtml(community)} · telltrace</title>
+<title>${escapeHtml(community)} · telltrace</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -48,7 +46,7 @@ ${banner(community, model, startedAt)}
   <main class="feed">
     <div class="sortbar">
       <button class="sort active" data-sort="hot" data-tip="Posts in the order they happened during the session">${flame()} Timeline</button>
-      <button class="sort" data-sort="top" data-tip="Posts ranked by tool calls — the prompts that made the agent work hardest first">${UP_SVG()} Most work</button>
+      <button class="sort" data-sort="top" data-tip="Posts ranked by tool calls — the prompts that made the agent work hardest first">${bolt()} Most work</button>
       <span class="sortbar-right">${posts.length} prompts</span>
     </div>
     <div id="posts">
@@ -149,25 +147,28 @@ function topbar(community) {
   return `<header class="topbar">
   <div class="topbar-in">
     <a class="brand" href="#top">
-      <svg class="mark" viewBox="0 0 24 24"><rect x="1" y="1" width="22" height="22" rx="11" fill="#ff4500"/><path d="M7 12.2h3l1.5-3.4 2 6.4 1.5-3.4H17" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg class="mark" viewBox="0 0 24 24">
+        <rect x="1" y="1" width="22" height="22" rx="7" fill="url(#mg)"/>
+        <path d="M5 15.5 8.2 9l2.3 7 2.4-9.5 1.6 5H19" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <defs><linearGradient id="mg" x1="0" y1="0" x2="24" y2="24"><stop stop-color="#ff5c33"/><stop offset="1" stop-color="#ff9d3d"/></linearGradient></defs>
+      </svg>
       <span class="brand-name">telltrace</span>
     </a>
-    <div class="fakesearch mono">t/${escapeHtml(community)}</div>
-    <span class="topbar-cta">agent session replay</span>
+    <span class="topbar-cta">the story of a build</span>
   </div>
 </header>`;
 }
 
 function banner(community, model, startedAt) {
   return `<div class="banner" id="top">
-  <div class="banner-art"></div>
   <div class="banner-in">
-    <div class="sub-avatar">t/</div>
     <div class="banner-txt">
-      <h1>t/${escapeHtml(community)}</h1>
+      <div class="banner-kicker">Session replay</div>
+      <h1>${escapeHtml(community)}</h1>
       <div class="banner-sub">
-        <span>u/claude &amp; u/you</span>
-        ${model ? `<span class="dotsep"></span><span class="mono">${escapeHtml(model)}</span>` : ''}
+        <span class="pair"><span class="avatar you">Y</span>You</span>
+        <span class="amp">×</span>
+        <span class="pair"><span class="avatar claude">C</span>Claude</span>
         ${startedAt ? `<span class="dotsep"></span><span>${escapeHtml(formatDate(startedAt))}</span>` : ''}
       </div>
     </div>
@@ -187,16 +188,18 @@ function renderPost(post, multiModel) {
     : '';
 
   return `<article class="post" id="p${post.n}" data-ops="${post.ops}">
-  <div class="gutter">
-    <svg class="vote" viewBox="0 0 16 16">${UP}</svg>
-    <span class="score" data-tip="${post.ops} tool calls">${post.ops}</span>
+  <div class="spine-node">
+    <span class="spine-dot"></span>
+    <span class="spine-time mono">${escapeHtml(post.offset)}</span>
+  </div>
+  <div class="gutter" data-tip="${post.ops} tool calls in this exchange">
+    ${bolt()}
+    <span class="score">${post.ops}</span>
   </div>
   <div class="post-main">
     <div class="post-meta">
-      <span class="avatar you">u</span>
-      <span class="author">u/you</span>
-      <span class="dotsep"></span>
-      <span class="when mono">${escapeHtml(post.offset)}</span>
+      <span class="avatar you">Y</span>
+      <span class="author">You</span>
       ${post.nFiles ? `<span class="flair files-flair">${post.nFiles} ${post.nFiles === 1 ? 'file' : 'files'}</span>` : ''}
       ${modelFlair}
     </div>
@@ -225,8 +228,8 @@ function renderComment(c, t0) {
   <button class="threadline" data-fold aria-label="collapse"></button>
   <div class="c-main">
     <div class="c-meta">
-      <span class="avatar claude">c</span>
-      <span class="author claude-a">u/claude</span>
+      <span class="avatar claude">C</span>
+      <span class="author claude-a">Claude</span>
       <span class="dotsep"></span>
       <span class="when mono">${escapeHtml(off)}</span>
     </div>
@@ -437,7 +440,8 @@ function css() {
   --text: #eef1f3;
   --dim: #939ba4;
   --faint: #5f6870;
-  --orange: #ff4500;
+  --brand: #ff5c33;
+  --brand-2: #ff9d3d;
   --blue: #4fa3ff;
   --claude: #d97757;
   --r: 14px;
@@ -467,18 +471,15 @@ a:hover { text-decoration: underline; }
 .brand:hover { text-decoration: none; }
 .mark { width: 26px; height: 26px; }
 .brand-name { font-weight: 700; font-size: 15px; letter-spacing: -0.015em; }
-.fakesearch { flex: 1; max-width: 480px; background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 7px 16px; font-size: 12px; color: var(--dim); }
-.topbar-cta { font-size: 12px; color: var(--faint); margin-left: auto; }
+.topbar-cta { font-size: 12px; color: var(--faint); margin-left: auto; font-style: italic; }
 
-.banner { border-bottom: 1px solid var(--border); background: var(--card); }
-.banner-art { height: 64px; background:
-  radial-gradient(500px 90px at 15% 100%, rgba(255,69,0,0.22), transparent 65%),
-  radial-gradient(600px 100px at 70% 100%, rgba(79,163,255,0.14), transparent 65%),
-  linear-gradient(180deg, #171c20, #14181b); }
-.banner-in { max-width: 1128px; margin: 0 auto; padding: 0 16px 14px; display: flex; gap: 14px; align-items: flex-end; transform: translateY(-18px); margin-bottom: -18px; }
-.sub-avatar { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, var(--orange), #ff8717); border: 4px solid var(--card); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; color: #fff; flex-shrink: 0; }
-.banner-txt h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
-.banner-sub { font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.banner { border-bottom: 1px solid var(--border); }
+.banner-in { max-width: 1128px; margin: 0 auto; padding: 30px 16px 24px; }
+.banner-kicker { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--brand); margin-bottom: 6px; }
+.banner-txt h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.022em; }
+.banner-sub { font-size: 12.5px; color: var(--dim); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.pair { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--text); }
+.amp { color: var(--faint); }
 
 .shell { max-width: 1128px; margin: 0 auto; display: grid; grid-template-columns: minmax(0,1fr) 316px; gap: 20px; padding: 20px 16px 80px; align-items: start; }
 
@@ -489,11 +490,25 @@ a:hover { text-decoration: underline; }
 .sort.active { background: var(--card-2); color: var(--text); }
 .sortbar-right { margin-left: auto; font-size: 12px; color: var(--faint); }
 
-.post { display: flex; background: var(--card); border: 1px solid var(--border); border-radius: var(--r); margin-bottom: 12px; overflow: hidden; scroll-margin-top: 66px; transition: border-color .15s; }
+#posts { position: relative; padding-left: 64px; }
+#posts::before {
+  content: ''; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; border-radius: 2px;
+  background: linear-gradient(180deg, var(--brand), var(--brand-2) 30%, var(--border-hi) 85%, transparent);
+  opacity: 0.65;
+}
+.post { position: relative; display: flex; background: var(--card); border: 1px solid var(--border); border-radius: var(--r); margin-bottom: 18px; scroll-margin-top: 66px; transition: border-color .15s; }
 .post:hover { border-color: var(--border-hi); }
-.post:target { border-color: var(--orange); }
-.gutter { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 14px 6px; width: 44px; flex-shrink: 0; background: rgba(255,255,255,0.015); }
-.vote { width: 18px; height: 18px; fill: var(--orange); opacity: 0.9; }
+.post:target { border-color: var(--brand); }
+.spine-node { position: absolute; left: -64px; top: 16px; width: 60px; display: flex; align-items: center; gap: 7px; }
+.spine-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-left: -0.5px;
+  background: var(--bg); border: 2.5px solid var(--brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 18%, transparent);
+}
+.spine-time { font-size: 10px; color: var(--faint); white-space: nowrap; }
+.spine-node::after { content: ''; position: absolute; left: 12px; right: -2px; top: 50%; height: 1px; background: linear-gradient(90deg, color-mix(in srgb, var(--brand) 40%, transparent), var(--border)); z-index: -1; }
+.gutter { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 14px 6px; width: 44px; flex-shrink: 0; background: rgba(255,255,255,0.015); border-radius: var(--r) 0 0 var(--r); color: var(--brand-2); }
+.gutter svg { width: 15px; height: 15px; }
 .score { font: 600 12px var(--mono); color: var(--text); }
 .post-main { padding: 12px 16px 10px; min-width: 0; flex: 1; }
 .post-meta { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--dim); flex-wrap: wrap; }
@@ -522,7 +537,7 @@ a:hover { text-decoration: underline; }
 .comment { display: flex; gap: 0; margin-top: 8px; }
 .threadline { width: 20px; flex-shrink: 0; background: none; border: none; cursor: pointer; position: relative; padding: 0; }
 .threadline::before { content: ''; position: absolute; left: 9px; top: 26px; bottom: 2px; width: 2px; border-radius: 2px; background: var(--border); transition: background .12s; }
-.threadline:hover::before { background: var(--orange); }
+.threadline:hover::before { background: var(--brand); }
 .c-main { flex: 1; min-width: 0; }
 .c-meta { display: flex; align-items: center; gap: 7px; }
 .c-body { font-size: 13px; margin: 5px 0 0 27px; color: var(--text); white-space: pre-wrap; word-break: break-word; max-width: 70ch; }
@@ -555,7 +570,7 @@ a:hover { text-decoration: underline; }
 .frank { font-size: 10px; color: var(--faint); }
 .fname { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fspark { height: 5px; background: var(--card-2); border-radius: 3px; overflow: hidden; }
-.fspark i { display: block; height: 100%; background: linear-gradient(90deg, var(--orange), #ff8717); border-radius: 3px; }
+.fspark i { display: block; height: 100%; background: linear-gradient(90deg, var(--brand), var(--brand-2)); border-radius: 3px; }
 .fcount { font-size: 10.5px; color: var(--dim); text-align: right; }
 .more-note { font-size: 11px; color: var(--faint); padding: 6px 4px 2px; }
 
@@ -742,6 +757,3 @@ function bubble() {
   return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 3.5h11v7h-6l-3 2.8V10.5h-2Z" stroke-linejoin="round"/></svg>';
 }
 
-function UP_SVG() {
-  return `<svg viewBox="0 0 16 16" fill="currentColor">${UP}</svg>`;
-}
