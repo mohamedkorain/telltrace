@@ -4,7 +4,7 @@
   "description": "Your agent session as a thread you can actually read — Reddit-style replays of Claude Code and Codex sessions.",
   "type": "module",
   "bin": {
-    "telltrace": "./bin/telltrace.js"
+    "telltrace": "bin/telltrace.js"
   },
   "main": "./src/index.js",
   "scripts": {
