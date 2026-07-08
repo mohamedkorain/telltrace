@@ -204,7 +204,7 @@ function renderPost(post, multiModel) {
       ${modelFlair}
     </div>
     <h2 class="post-title">${escapeHtml(title)}</h2>
-    ${body ? `<div class="post-body${longBody ? ' clamp' : ''}">${escapeHtml(body)}</div>${longBody ? '<button class="readmore" data-expand>Read more</button>' : ''}` : ''}
+    ${body ? `<div class="post-body${longBody ? ' clamp' : ''}">${mdLite(body)}</div>${longBody ? '<button class="readmore" data-expand>Read more</button>' : ''}` : ''}
     <div class="post-actions">
       <button class="paction" data-collapse="c${post.n}">
         ${bubble()} <span>${nComments} ${nComments === 1 ? 'comment' : 'comments'}</span>
@@ -221,8 +221,9 @@ function renderPost(post, multiModel) {
 function renderComment(c, t0) {
   const runs = c.runs.map(renderRun).join('');
   const off = offsetLabel(c.timestamp, t0);
+  const longC = (c.text ?? '').length > 480;
   const body = c.text
-    ? `<div class="c-body">${escapeHtml(truncate(c.text, 900))}</div>`
+    ? `<div class="c-body${longC ? ' clamp' : ''}">${mdLite(c.text)}</div>${longC ? '<button class="readmore cm" data-expand>Read more</button>' : ''}`
     : '';
   return `<div class="comment">
   <button class="threadline" data-fold aria-label="collapse"></button>
@@ -541,7 +542,19 @@ a:hover { text-decoration: underline; }
 .c-main { flex: 1; min-width: 0; }
 .c-meta { display: flex; align-items: center; gap: 7px; }
 .c-body { font-size: 13px; margin: 5px 0 0 27px; color: var(--text); white-space: pre-wrap; word-break: break-word; max-width: 70ch; }
-.comment.folded .c-body, .comment.folded .runs { display: none; }
+.c-body.clamp { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.readmore.cm { margin-left: 27px; }
+.comment.folded .c-body, .comment.folded .runs, .comment.folded .readmore { display: none; }
+
+.codeblock {
+  display: block; margin: 6px 0; padding: 10px 12px; border-radius: 8px;
+  background: rgba(0,0,0,0.28); border: 1px solid var(--border);
+  font: 400 11.5px/1.5 var(--mono); overflow-x: auto; white-space: pre;
+}
+.ic { font: 500 11.5px var(--mono); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 4px; padding: 0.5px 5px; }
+.mdh { display: block; font-weight: 650; margin-top: 4px; }
+.mdli { display: block; padding-left: 16px; position: relative; }
+.mdli::before { content: ''; position: absolute; left: 4px; top: 0.62em; width: 5px; height: 5px; border-radius: 50%; background: var(--faint); }
 .runs { margin: 7px 0 2px 27px; display: flex; flex-direction: column; gap: 3px; }
 .run { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 8px; background: rgba(255,255,255,0.02); border: 1px solid transparent; min-width: 0; }
 .run:hover { border-color: var(--border); background: var(--card-2); }
@@ -663,8 +676,11 @@ function communityName(sourcePath) {
   if (!sourcePath) return 'session';
   const parts = String(sourcePath).split('/').filter(Boolean);
   const dir = parts.length >= 2 ? parts[parts.length - 2] : 'session';
-  const cleaned = dir.replace(/^-Users-[^-]+-?/, '').replace(/^-+|-+$/g, '');
-  return (cleaned || 'session').slice(0, 40);
+  const segments = dir.split('-').filter(Boolean);
+  const tail = segments.filter(s => s !== 'Users');
+  // "-Users-mkorain-Desktop-Projects" → "Projects"; "-Users-mkorain" → "mkorain"
+  const name = tail.length > 1 ? tail[tail.length - 1] : tail[0] ?? 'session';
+  return (name || 'session').slice(0, 40);
 }
 
 function offsetLabel(ts, t0) {
@@ -711,6 +727,17 @@ function shortPath(p) {
 function truncate(s, n) {
   s = String(s);
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+
+// Escape-first markdown-lite: code fences, inline code, bold, bullets, headers.
+function mdLite(text) {
+  let s = escapeHtml(text);
+  s = s.replace(/```([a-z]*)\n?([\s\S]*?)```/g, (_, lang, code) => `<pre class="codeblock">${code.trimEnd()}</pre>`);
+  s = s.replace(/`([^`\n]+)`/g, '<code class="ic">$1</code>');
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/^#{1,4} (.+)$/gm, '<span class="mdh">$1</span>');
+  s = s.replace(/^(\s*)(?:[-*]|\d+\.) (.+)$/gm, (_, indent, item) => `${indent}<span class="mdli">${item}</span>`);
+  return s;
 }
 
 function escapeHtml(s) {
