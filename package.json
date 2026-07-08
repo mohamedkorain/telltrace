@@ -1,6 +1,6 @@
 {
   "name": "telltrace",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Your agent session as a thread you can actually read — Reddit-style replays of Claude Code and Codex sessions.",
   "type": "module",
   "bin": {
