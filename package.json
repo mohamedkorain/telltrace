@@ -20,7 +20,7 @@
     "replay",
     "flowchart"
   ],
-  "author": "",
+  "author": "Mohamed Korain",
   "license": "MIT",
   "engines": {
     "node": ">=18"
@@ -33,6 +33,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "git+https://github.com/mohamedkorain/telltrace.git"
+  },
+  "homepage": "https://github.com/mohamedkorain/telltrace#readme",
+  "bugs": {
+    "url": "https://github.com/mohamedkorain/telltrace/issues"
   }
 }

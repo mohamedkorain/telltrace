@@ -2,6 +2,10 @@
 
 > Your agent session as a thread you can actually read.
 
+![telltrace rendering the very session in which it was built](docs/screenshot.png)
+
+*Meta: this screenshot is telltrace replaying the Claude Code session that created telltrace.*
+
 Claude Code just worked for 40 minutes and touched 30 files. Before you commit — or when a teammate asks "how was this made?" — you need the story, not a 4000-line JSONL file.
 
 **telltrace** renders any Claude Code session as a familiar, Reddit-style thread:
