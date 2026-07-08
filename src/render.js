@@ -54,7 +54,7 @@ ${banner(community, model, startedAt)}
     </div>
   </main>
   <aside class="rail">
-    ${aboutCard(posts, toolCalls, files, usage, usageByModel, startedAt, endedAt)}
+    ${aboutCard(posts, toolCalls, files, usage, usageByModel, startedAt, endedAt, events)}
     ${modelsCard(usageByModel)}
     ${activityCard(toolCalls, posts)}
     ${filesCard(files)}
@@ -303,26 +303,48 @@ function formatUsd(n) {
   return `$${n.toFixed(3)}`;
 }
 
-function aboutCard(posts, toolCalls, files, usage, usageByModel, startedAt, endedAt) {
+function aboutCard(posts, toolCalls, files, usage, usageByModel, startedAt, endedAt, events) {
   const tokens = usage ? usage.input + usage.output + usage.cacheRead + usage.cacheWrite : 0;
   const cost = totalCost(usageByModel);
+  const wall = formatDuration(startedAt, endedAt);
+  const activeMs = activeDuration(events);
   const rows = [
-    ['Prompts', posts.length],
-    ['Tool calls', toolCalls.length],
-    ['Files touched', files.length],
-    ['Duration', formatDuration(startedAt, endedAt)],
+    ['Prompts', posts.length, null],
+    ['Tool calls', toolCalls.length, null],
+    ['Files touched', files.length, null],
+    ['Active time', formatMs(activeMs), `Time the agent was actually working. Wall clock (first to last event): ${wall}`],
   ];
-  if (tokens) rows.push(['Tokens', compact(tokens)]);
-  if (cost != null) rows.push(['Est. cost', formatUsd(cost)]);
+  if (tokens) {
+    rows.push(['Tokens', compact(tokens), `Fresh input ${compact(usage.input)} · output ${compact(usage.output)} · cache read ${compact(usage.cacheRead)} · cache write ${compact(usage.cacheWrite)}`]);
+  }
+  if (cost != null) rows.push(['Est. cost', formatUsd(cost), 'Estimated from token usage at list API prices; cache reads billed at 10% of input']);
 
   return `<div class="card">
   <div class="card-head accent-head">About this session</div>
   <div class="card-pad">
     <div class="about-grid">
-      ${rows.map(([l, v]) => `<div class="about-row"><span class="about-v">${escapeHtml(String(v))}</span><span class="about-l">${l}</span></div>`).join('')}
+      ${rows.map(([l, v, tip]) => `<div class="about-row"${tip ? ` data-tip="${escapeHtml(tip)}"` : ''}><span class="about-v">${escapeHtml(String(v))}</span><span class="about-l">${l}</span></div>`).join('')}
     </div>
   </div>
 </div>`;
+}
+
+// Sum of inter-event gaps capped at 5 minutes — idle stretches between
+// resumed sittings would otherwise dominate the wall-clock span.
+function activeDuration(events) {
+  const times = (events ?? []).map(e => Date.parse(e.timestamp)).filter(Number.isFinite).sort((a, b) => a - b);
+  let ms = 0;
+  for (let i = 1; i < times.length; i++) ms += Math.min(times[i] - times[i - 1], 5 * 60_000);
+  return ms;
+}
+
+function formatMs(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return '—';
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
 function modelsCard(usageByModel) {
@@ -565,6 +587,7 @@ a:hover { text-decoration: underline; }
 .run-d { font-size: 11px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .rail { position: sticky; top: 66px; display: flex; flex-direction: column; gap: 14px; max-height: calc(100vh - 80px); overflow-y: auto; scrollbar-width: thin; }
+.rail > * { flex-shrink: 0; }
 .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
 .card-head { padding: 11px 16px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--border); }
 .accent-head { background: linear-gradient(90deg, rgba(255,69,0,0.14), transparent 70%); color: var(--text); }
