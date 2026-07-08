@@ -46,6 +46,15 @@ telltrace --latest -o replay.html
 - **Explain your PR.** Attach the trace; reviewers see every prompt and every file the agent read before it wrote.
 - **Share the run.** "Built in 43 minutes" hits different with the thread to prove it.
 
+## Privacy & sharing
+
+A trace contains your prompts, Claude's narration, and every shell command from the session — treat it like a chat log.
+
+- **Automatic redaction:** common credential formats (Anthropic/OpenAI-style keys, GitHub tokens, AWS access keys, Slack tokens, JWTs, bearer tokens, private key blocks, `password=`/`api_key=` assignments) are replaced with `[redacted]` at render time.
+- **Redaction is best-effort.** Novel token formats or secrets pasted as plain prose can slip through — skim a trace before posting it publicly.
+- All session content is HTML-escaped before rendering, so a malicious string inside a session can't execute script in the viewer's browser.
+- The only external request the page makes is loading fonts from Google Fonts (no session data leaves the file); everything else works offline.
+
 ## Roadmap
 
 - [ ] Codex log adapter

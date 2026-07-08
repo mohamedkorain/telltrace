@@ -763,8 +763,35 @@ function mdLite(text) {
   return s;
 }
 
+// Common credential formats scrubbed from every rendered string, since
+// traces are meant to be shared and sessions routinely contain live keys.
+const SECRET_PATTERNS = [
+  /\bsk-(?:ant-)?[A-Za-z0-9_-]{16,}\b/g,
+  /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g,
+  /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,
+  /\bAKIA[0-9A-Z]{16}\b/g,
+  /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g,
+  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\b/g,
+  /\bBearer\s+[A-Za-z0-9._~+/-]{16,}=*/g,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
+  /\b(api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|password|passwd)\s*([=:])\s*['"]?[^\s'"]{6,}/gi,
+];
+
+function redact(s) {
+  let out = String(s);
+  for (const re of SECRET_PATTERNS) {
+    out = out.replace(re, (m, ...groups) => {
+      if (typeof groups[0] === 'string' && typeof groups[1] === 'string' && m.includes(groups[1])) {
+        return `${groups[0]}${groups[1]}[redacted]`;
+      }
+      return '[redacted]';
+    });
+  }
+  return out;
+}
+
 function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  return redact(String(s ?? '')).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 function basename(p) {
