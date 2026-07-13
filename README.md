@@ -48,7 +48,7 @@ telltrace --latest -o replay.html
 
 - **Audit before you commit.** Autonomous runs need receipts.
 - **Explain your PR.** Attach the trace; reviewers see every prompt and every file the agent read before it wrote.
-- **Share the run.** "Built in 43 minutes" hits different with the thread to prove it.
+- **Share the run.** "The agent built this in one session" hits different with the thread to prove it.
 
 ## Privacy & sharing
 
