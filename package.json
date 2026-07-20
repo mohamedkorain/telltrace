@@ -1,7 +1,7 @@
 {
   "name": "telltrace",
-  "version": "0.2.1",
-  "description": "Your agent session as a thread you can actually read — replay Claude Code sessions as beautiful, shareable HTML. Codex support coming.",
+  "version": "0.3.0",
+  "description": "Your agent session as a thread you can actually read — replay Claude Code and Codex sessions as beautiful, shareable HTML.",
   "type": "module",
   "bin": {
     "telltrace": "bin/telltrace.js"
@@ -9,7 +9,7 @@
   "main": "./src/index.js",
   "scripts": {
     "start": "node bin/telltrace.js",
-    "test": "node --test test/"
+    "test": "node --test"
   },
   "keywords": [
     "claude-code",

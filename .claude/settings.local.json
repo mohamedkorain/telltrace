@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s https://api.npmjs.org/downloads/point/last-week/telltrace)",
+      "Bash(curl -s https://api.npmjs.org/downloads/point/last-month/telltrace)",
+      "Bash(curl -s https://registry.npmjs.org/telltrace)",
+      "WebFetch(domain:claude.com)",
+      "Bash(gh api *)",
+      "Bash(curl -s \"https://api.github.com/search/issues?q=type:pr+author:mohamedkorain+is:merged+created:%3E2025-07-18\")",
+      "Bash(curl -s \"https://api.github.com/repos/mohamedkorain/telltrace\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\({k:d.get\\(k\\) for k in \\('stargazers_count','forks_count','open_issues_count'\\)}\\)\")",
+      "Bash(curl -s \"https://registry.npmjs.org/-/v1/search?text=maintainer:mkorain&size=20\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(o['package']['name'], o['package']['version']\\) for o in d['objects']]\")",
+      "Bash(curl -s https://raw.githubusercontent.com/mohamedkorain/telltrace/main/README.md)",
+      "Bash(curl -s https://api.npmjs.org/downloads/range/2026-07-01:2026-07-20/telltrace)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(x['day'], x['downloads']\\) for x in d.get\\('downloads',[]\\)]\")",
+      "Bash(touch /Users/mkorain/.claude/projects/-Users-mkorain-users-mkorain-telltrace/memory/MEMORY.md)",
+      "Read(//Users/mkorain/.codex/sessions/**)",
+      "Bash(python3 -c ' *)",
+      "Bash(node *)",
+      "Bash(npm test *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'Add Codex session support *)"
+    ]
+  }
+}

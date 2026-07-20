@@ -22,9 +22,10 @@ const ICON = {
 
 export function renderHTML(session) {
   const { events, files, model, startedAt, endedAt, sourcePath, usage, usageByModel } = session;
+  const agentName = session.agentName ?? 'Claude';
   const posts = buildPosts(events, startedAt);
   const toolCalls = events.filter(e => e.type === 'tool_call');
-  const community = communityName(sourcePath);
+  const community = session.project ?? communityName(sourcePath);
   const models = Object.keys(usageByModel ?? {}).filter(m => m !== 'unknown' && !m.includes('synthetic'));
   const multiModel = models.length > 1;
 
@@ -41,7 +42,7 @@ export function renderHTML(session) {
 </head>
 <body>
 ${topbar(community)}
-${banner(community, model, startedAt)}
+${banner(community, model, startedAt, agentName)}
 <div class="shell">
   <main class="feed">
     <div class="sortbar">
@@ -50,7 +51,7 @@ ${banner(community, model, startedAt)}
       <span class="sortbar-right">${posts.length} prompts</span>
     </div>
     <div id="posts">
-      ${posts.map(p => renderPost(p, multiModel)).join('\n')}
+      ${posts.map(p => renderPost(p, multiModel, agentName)).join('\n')}
     </div>
   </main>
   <aside class="rail">
@@ -159,7 +160,7 @@ function topbar(community) {
 </header>`;
 }
 
-function banner(community, model, startedAt) {
+function banner(community, model, startedAt, agentName) {
   return `<div class="banner" id="top">
   <div class="banner-in">
     <div class="banner-txt">
@@ -168,7 +169,7 @@ function banner(community, model, startedAt) {
       <div class="banner-sub">
         <span class="pair"><span class="avatar you">Y</span>You</span>
         <span class="amp">×</span>
-        <span class="pair"><span class="avatar claude">C</span>Claude</span>
+        <span class="pair"><span class="avatar claude">${escapeHtml(agentName[0])}</span>${escapeHtml(agentName)}</span>
         ${startedAt ? `<span class="dotsep"></span><span>${escapeHtml(formatDate(startedAt))}</span>` : ''}
       </div>
     </div>
@@ -178,10 +179,10 @@ function banner(community, model, startedAt) {
 
 /* ------------------------------------ posts ------------------------------------ */
 
-function renderPost(post, multiModel) {
+function renderPost(post, multiModel, agentName) {
   const { title, body } = splitPrompt(post.prompt.text ?? '');
   const longBody = body.length > 500;
-  const comments = post.comments.map(c => renderComment(c, post.t0)).join('');
+  const comments = post.comments.map(c => renderComment(c, post.t0, agentName)).join('');
   const nComments = post.comments.length;
   const modelFlair = multiModel && post.model
     ? `<span class="flair model-flair mono" data-tip="${escapeHtml(post.model)}">${escapeHtml(shortModel(post.model))}</span>`
@@ -218,7 +219,7 @@ function renderPost(post, multiModel) {
 </article>`;
 }
 
-function renderComment(c, t0) {
+function renderComment(c, t0, agentName) {
   const runs = c.runs.map(renderRun).join('');
   const off = offsetLabel(c.timestamp, t0);
   const longC = (c.text ?? '').length > 480;
@@ -229,8 +230,8 @@ function renderComment(c, t0) {
   <button class="threadline" data-fold aria-label="collapse"></button>
   <div class="c-main">
     <div class="c-meta">
-      <span class="avatar claude">C</span>
-      <span class="author claude-a">Claude</span>
+      <span class="avatar claude">${escapeHtml(agentName[0])}</span>
+      <span class="author claude-a">${escapeHtml(agentName)}</span>
       <span class="dotsep"></span>
       <span class="when mono">${escapeHtml(off)}</span>
     </div>

@@ -4,11 +4,11 @@
 
 ![a Claude Code session rendered by telltrace](docs/screenshot.png)
 
-*Try it on the bundled sample: `telltrace samples/demo-session.jsonl --open`*
+*Try it on the bundled samples: `telltrace samples/demo-session.jsonl --open` (Claude Code) or `telltrace samples/demo-codex-session.jsonl --open` (Codex)*
 
 Claude Code just worked for 40 minutes and touched 30 files. Before you commit — or when a teammate asks "how was this made?" — you need the story, not a 4000-line JSONL file.
 
-**telltrace** renders any Claude Code session as a familiar, Reddit-style thread:
+**telltrace** renders any Claude Code or Codex session as a familiar, Reddit-style thread (format auto-detected):
 
 - **Your prompts are posts.** Title, body, an ops-count in the karma gutter, file flair.
 - **The agent's work is the comment thread.** Claude's narration becomes comments; the tool calls it made under each one are collapsed into compact runs (`Edit ×6 render.js`), threaded and foldable exactly like Reddit comments.
@@ -31,11 +31,16 @@ npx telltrace --latest --open
 ## Usage
 
 ```bash
-# Your most recent Claude Code session, opened in the browser
+# Your most recent agent session (Claude Code or Codex), opened in the browser
 telltrace --latest --open
+
+# Latest session from one agent only
+telltrace --latest claude --open
+telltrace --latest codex --open
 
 # A specific session
 telltrace ~/.claude/projects/<project>/<session>.jsonl --open
+telltrace ~/.codex/sessions/<yyyy>/<mm>/<dd>/<rollout>.jsonl --open
 
 # Newest session in a project directory
 telltrace ~/.claude/projects/<project> --open
@@ -61,7 +66,7 @@ A trace contains your prompts, Claude's narration, and every shell command from 
 
 ## Roadmap
 
-- [ ] Codex log adapter
+- [x] Codex log adapter
 - [ ] Subagent threads (nested one level deeper, like real comment trees)
 - [ ] Inline diffs per Edit/Write
 - [ ] `telltrace share` — hosted, linkable traces

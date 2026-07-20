@@ -2,6 +2,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join, basename } from 'node:path';
 import { parseSession } from '../src/parser.js';
+import { parseCodexSession, looksLikeCodexSession } from '../src/parser-codex.js';
 import { renderHTML } from '../src/render.js';
 
 const args = process.argv.slice(2);
@@ -10,9 +11,11 @@ if (args.length === 0 || args.includes('-h') || args.includes('--help')) {
   process.stdout.write(`telltrace — visualize what an agent built
 
 Usage:
-  telltrace <session.jsonl>           Render a single session
+  telltrace <session.jsonl>           Render a single session (Claude Code or Codex, auto-detected)
   telltrace <dir>                     Pick the most recent .jsonl in a dir
-  telltrace --latest                  Find latest Claude Code session in ~/.claude
+  telltrace --latest                  Latest session across ~/.claude and ~/.codex
+  telltrace --latest claude           Latest Claude Code session only
+  telltrace --latest codex            Latest Codex session only
 
 Options:
   -o, --output <path>                 Write HTML to path (default: ./trace.html)
@@ -33,7 +36,8 @@ for (let i = 0; i < args.length; i++) {
   } else if (a === '--open') {
     openAfter = true;
   } else if (a === '--latest') {
-    inputPath = findLatestClaudeSession();
+    const which = args[i + 1] === 'claude' || args[i + 1] === 'codex' ? args[++i] : 'any';
+    inputPath = findLatestSession(which);
   } else if (!a.startsWith('-')) {
     inputPath = a;
   }
@@ -51,7 +55,9 @@ if (!existsSync(inputPath)) {
 
 const resolved = resolveInput(inputPath);
 const raw = readFileSync(resolved, 'utf8');
-const session = parseSession(raw, { sourcePath: resolved });
+const session = looksLikeCodexSession(raw)
+  ? parseCodexSession(raw, { sourcePath: resolved })
+  : parseSession(raw, { sourcePath: resolved });
 const html = renderHTML(session);
 
 writeFileSync(outputPath, html, 'utf8');
@@ -80,20 +86,25 @@ function resolveInput(p) {
   return abs;
 }
 
-function findLatestClaudeSession() {
+function findLatestSession(which = 'any') {
   const home = process.env.HOME || process.env.USERPROFILE;
-  const root = join(home, '.claude', 'projects');
-  if (!existsSync(root)) return null;
+  const roots = [];
+  if (which !== 'codex') roots.push(join(home, '.claude', 'projects'));
+  if (which !== 'claude') roots.push(join(home, '.codex', 'sessions'));
   let best = null;
-  for (const dir of readdirSync(root)) {
-    const projectDir = join(root, dir);
-    if (!statSync(projectDir).isDirectory()) continue;
-    for (const f of readdirSync(projectDir)) {
-      if (!f.endsWith('.jsonl')) continue;
-      const full = join(projectDir, f);
-      const mtime = statSync(full).mtimeMs;
-      if (!best || mtime > best.mtime) best = { full, mtime };
+  const walk = (dir, depth) => {
+    for (const f of readdirSync(dir)) {
+      const full = join(dir, f);
+      const stat = statSync(full);
+      if (stat.isDirectory()) {
+        if (depth < 4) walk(full, depth + 1);
+      } else if (f.endsWith('.jsonl')) {
+        if (!best || stat.mtimeMs > best.mtime) best = { full, mtime: stat.mtimeMs };
+      }
     }
+  };
+  for (const root of roots) {
+    if (existsSync(root)) walk(root, 0);
   }
   return best?.full ?? null;
 }
