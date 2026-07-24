@@ -96,6 +96,7 @@ function normalizeEntry(entry, entryModel) {
           toolUseId: block.id,
           file: extractFileFromArgs(tool, args),
           action: extractActionFromTool(tool),
+          diff: extractDiff(tool, args),
           id: entry.uuid,
           model: entryModel,
         });
@@ -168,6 +169,46 @@ function extractToolUseId(entry) {
 function extractFileFromArgs(tool, args) {
   if (!args || typeof args !== 'object') return null;
   return args.file_path ?? args.path ?? args.notebook_path ?? null;
+}
+
+// Signed diff lines for edit-like tools: s is '+', '-', ' ' (context) or '~' (meta).
+export const MAX_DIFF_LINES = 80;
+
+function extractDiff(tool, args) {
+  if (!args || typeof args !== 'object') return null;
+  const t = String(tool ?? '').toLowerCase();
+  if (t === 'edit') return editDiff([args]);
+  if (t === 'multiedit' && Array.isArray(args.edits)) return editDiff(args.edits);
+  if (t === 'write' && typeof args.content === 'string') {
+    return capDiff(args.content.split('\n').map(l => ({ s: '+', t: l })));
+  }
+  if (t === 'notebookedit' && typeof args.new_source === 'string') {
+    return capDiff(args.new_source.split('\n').map(l => ({ s: '+', t: l })));
+  }
+  return null;
+}
+
+function editDiff(edits) {
+  const lines = [];
+  for (const e of edits) {
+    if (!e || typeof e !== 'object') continue;
+    if (lines.length) lines.push({ s: '~', t: '⋯' });
+    const oldS = String(e.old_string ?? '');
+    const newS = String(e.new_string ?? '');
+    if (oldS) for (const l of oldS.split('\n')) lines.push({ s: '-', t: l });
+    if (newS) for (const l of newS.split('\n')) lines.push({ s: '+', t: l });
+  }
+  return capDiff(lines);
+}
+
+export function capDiff(lines) {
+  if (!lines.length) return null;
+  if (lines.length > MAX_DIFF_LINES) {
+    const extra = lines.length - MAX_DIFF_LINES;
+    lines = lines.slice(0, MAX_DIFF_LINES);
+    lines.push({ s: '~', t: `… ${extra} more lines` });
+  }
+  return lines;
 }
 
 function extractActionFromTool(tool) {

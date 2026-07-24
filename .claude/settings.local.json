@@ -20,7 +20,26 @@
       "Bash(node *)",
       "Bash(npm test *)",
       "Bash(git add *)",
-      "Bash(git commit -m 'Add Codex session support *)"
+      "Bash(git commit -m 'Add Codex session support *)",
+      "Bash(git config *)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('latest:', d['dist-tags']['latest'], '| published:', d['time'][d['dist-tags']['latest']][:10]\\)\")",
+      "Bash(curl -s \"https://api.npmjs.org/downloads/range/2026-07-17:2026-07-24/telltrace\")",
+      "Bash(python3 -c \"import json,sys; [print\\(x['day'], x['downloads']\\) for x in json.load\\(sys.stdin\\).get\\('downloads',[]\\)]\")",
+      "Bash(git fetch *)",
+      "Bash(curl -s \"https://registry.npmjs.org/telltrace?t=$\\(date +%s\\)\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('dist-tags:', d['dist-tags']\\); print\\('versions:', list\\(d['versions'].keys\\(\\)\\)\\); print\\('0.3.0 published:', d['time'].get\\('0.3.0','—'\\)\\)\")",
+      "Bash(git push *)",
+      "Bash(npm whoami *)",
+      "Bash(npm publish *)",
+      "Bash(open *)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('latest:', d['dist-tags']['latest']\\)\")",
+      "Bash(grep -v \"^\\\\s*$\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('latest:', d['dist-tags']['latest'], '| published:', d['time'].get\\('0.3.0','—'\\)\\)\")",
+      "Bash(npx -y telltrace@0.3.0 /Users/mkorain/users/mkorain/telltrace/samples/demo-codex-session.jsonl -o published-check.html)",
+      "Bash(python3 -)",
+      "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless --disable-gpu --screenshot=/private/tmp/claude-501/-Users-mkorain-users-mkorain-telltrace/5b2e9612-4ccf-48a9-abc3-5d3d56e5b042/scratchpad/diff-shot.png --window-size=1200,2400 --hide-scrollbars file:///private/tmp/claude-501/-Users-mkorain-users-mkorain-telltrace/5b2e9612-4ccf-48a9-abc3-5d3d56e5b042/scratchpad/diff-claude-open.html)",
+      "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless --disable-gpu --screenshot=/private/tmp/claude-501/-Users-mkorain-users-mkorain-telltrace/5b2e9612-4ccf-48a9-abc3-5d3d56e5b042/scratchpad/demo-diff.png --window-size=1100,900 --hide-scrollbars file:///private/tmp/claude-501/-Users-mkorain-users-mkorain-telltrace/5b2e9612-4ccf-48a9-abc3-5d3d56e5b042/scratchpad/demo-diff.html)",
+      "Bash(git commit --quiet -m 'Add inline diffs for Edit/Write/apply_patch *)"
     ]
   }
 }

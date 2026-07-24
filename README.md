@@ -12,6 +12,7 @@ Claude Code just worked for 40 minutes and touched 30 files. Before you commit �
 
 - **Your prompts are posts.** Title, body, an ops-count in the karma gutter, file flair.
 - **The agent's work is the comment thread.** Claude's narration becomes comments; the tool calls it made under each one are collapsed into compact runs (`Edit ×6 render.js`), threaded and foldable exactly like Reddit comments.
+- **Diffs where they happened.** Every `Edit`/`Write`/`apply_patch` gets a `diff` badge — click it to expand a color-coded diff of exactly what changed, right under the prompt that caused it.
 - **The sidebar is "About this session".** Prompts, tool calls, files touched, duration, token usage — plus an activity graph, top files, and tool mix.
 
 One self-contained HTML file. No server, no login, works offline. Drop it in Slack, attach it to a PR, post it.
@@ -68,7 +69,7 @@ A trace contains your prompts, Claude's narration, and every shell command from 
 
 - [x] Codex log adapter
 - [ ] Subagent threads (nested one level deeper, like real comment trees)
-- [ ] Inline diffs per Edit/Write
+- [x] Inline diffs per Edit/Write
 - [ ] `telltrace share` — hosted, linkable traces
 - [ ] GitHub Action: auto-attach a trace to agent-generated PRs
 

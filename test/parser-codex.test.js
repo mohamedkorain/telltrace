@@ -60,6 +60,36 @@ test('filters harness-injected user messages', () => {
   assert.equal(prompts[0].text, 'real prompt');
 });
 
+test('codex apply_patch carries a signed diff', () => {
+  const s = parseCodexSession(codexRaw);
+  const patch = s.events.find(e => e.type === 'tool_call' && e.tool === 'apply_patch');
+  assert.ok(Array.isArray(patch.diff));
+  assert.ok(patch.diff.some(l => l.s === '+' && l.t.includes('printJSON')));
+  assert.ok(patch.diff.some(l => l.s === '-' && l.t.includes('printReport')));
+});
+
+test('claude Edit and Write tools carry diffs', () => {
+  const raw = [
+    JSON.stringify({ type: 'assistant', timestamp: 't', message: { content: [
+      { type: 'tool_use', id: 'tu1', name: 'Edit', input: { file_path: '/a.js', old_string: 'foo()', new_string: 'bar()' } },
+      { type: 'tool_use', id: 'tu2', name: 'Write', input: { file_path: '/b.js', content: 'line1\nline2' } },
+      { type: 'tool_use', id: 'tu3', name: 'Read', input: { file_path: '/c.js' } },
+    ] } }),
+  ].join('\n');
+  const s = parseSession(raw);
+  const [edit, write, read] = s.events.filter(e => e.type === 'tool_call');
+  assert.deepEqual(edit.diff, [{ s: '-', t: 'foo()' }, { s: '+', t: 'bar()' }]);
+  assert.deepEqual(write.diff, [{ s: '+', t: 'line1' }, { s: '+', t: 'line2' }]);
+  assert.equal(read.diff, null);
+});
+
+test('renders expandable diff blocks', () => {
+  const html = renderHTML(parseCodexSession(codexRaw, { sourcePath: '/x/rollout-demo.jsonl' }));
+  assert.match(html, /<details class="rund">/);
+  assert.match(html, /class="dl add"/);
+  assert.match(html, /class="dl del"/);
+});
+
 test('renders codex session with Codex byline', () => {
   const html = renderHTML(parseCodexSession(codexRaw, { sourcePath: '/x/rollout-demo.jsonl' }));
   assert.match(html, /<title>orbit · telltrace<\/title>/);

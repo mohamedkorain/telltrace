@@ -127,6 +127,7 @@ function threadify(items) {
         last.count++;
         if (e.file) last.files.add(e.file);
         if (e.args?.command) last.cmds.push(e.args.command);
+        if (e.diff) last.diffs.push({ file: e.file, lines: e.diff });
       } else {
         current.runs.push({
           tool: e.tool,
@@ -135,6 +136,7 @@ function threadify(items) {
           files: new Set(e.file ? [e.file] : []),
           cmds: e.args?.command ? [e.args.command] : [],
           arg: summarizeArgs(e.tool, e.args),
+          diffs: e.diff ? [{ file: e.file, lines: e.diff }] : [],
         });
       }
     }
@@ -257,11 +259,29 @@ function renderRun(r) {
   if (r.files.size) tipParts.push([...r.files].map(basename).slice(0, 8).join(', ') + (r.files.size > 8 ? '…' : ''));
   if (r.action === 'bash') tipParts.push(r.cmds.slice(0, 3).join(' && ').slice(0, 200));
 
-  return `<div class="run" data-tip="${escapeHtml(tipParts.filter(Boolean).join(' · '))}">
+  const row = `
     <span class="run-i" style="--c:${cfg.color}"><svg viewBox="0 0 16 16">${ICON[r.action] ?? ICON.other}</svg></span>
     <span class="run-tool">${escapeHtml(r.tool)}</span>
     ${r.count > 1 ? `<span class="run-n mono" style="--c:${cfg.color}">×${r.count}</span>` : ''}
-    ${detail ? `<span class="run-d mono">${escapeHtml(truncate(detail, 88))}</span>` : ''}
+    ${detail ? `<span class="run-d mono">${escapeHtml(truncate(detail, 88))}</span>` : ''}`;
+  const tip = escapeHtml(tipParts.filter(Boolean).join(' · '));
+
+  if (!r.diffs?.length) {
+    return `<div class="run" data-tip="${tip}">${row}</div>`;
+  }
+  return `<details class="rund">
+  <summary class="run" data-tip="${tip}">${row}<span class="run-diffb mono">diff</span></summary>
+  <div class="diffwrap">${r.diffs.map(renderDiff).join('')}</div>
+</details>`;
+}
+
+function renderDiff(d) {
+  const lines = d.lines
+    .map(l => `<span class="dl ${l.s === '+' ? 'add' : l.s === '-' ? 'del' : l.s === '~' ? 'meta' : 'ctx'}">${escapeHtml(l.t) || ' '}</span>`)
+    .join('');
+  return `<div class="diffblock">
+    ${d.file ? `<div class="diff-f mono">${escapeHtml(shortPath(d.file))}</div>` : ''}
+    <pre class="diff mono">${lines}</pre>
   </div>`;
 }
 
@@ -586,6 +606,21 @@ a:hover { text-decoration: underline; }
 .run-tool { font-size: 12px; font-weight: 600; flex-shrink: 0; }
 .run-n { font-size: 10.5px; font-weight: 600; color: var(--c); flex-shrink: 0; }
 .run-d { font-size: 11px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+details.rund { min-width: 0; }
+details.rund > summary { cursor: pointer; list-style: none; }
+details.rund > summary::-webkit-details-marker { display: none; }
+details.rund[open] > summary { border-color: var(--border); background: var(--card-2); }
+.run-diffb { margin-left: auto; flex-shrink: 0; font-size: 9.5px; padding: 1px 6px; border-radius: 5px; color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 35%, transparent); background: color-mix(in srgb, var(--blue) 10%, transparent); }
+details.rund[open] .run-diffb { color: var(--dim); border-color: var(--border-hi); background: transparent; }
+.diffwrap { margin: 4px 0 6px 28px; display: flex; flex-direction: column; gap: 6px; }
+.diffblock { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--card); }
+.diff-f { font-size: 10.5px; padding: 4px 9px; color: var(--dim); background: var(--card-2); border-bottom: 1px solid var(--border); }
+pre.diff { margin: 0; padding: 6px 0; font-size: 11px; line-height: 1.55; overflow-x: auto; }
+.dl { display: block; padding: 0 10px; white-space: pre; }
+.dl.add { background: rgba(87,166,74,0.13); color: #a5d99a; }
+.dl.del { background: rgba(229,83,75,0.11); color: #e8938c; }
+.dl.meta { color: var(--faint); padding-top: 2px; }
+.dl.ctx { color: var(--dim); }
 
 .rail { position: sticky; top: 66px; display: flex; flex-direction: column; gap: 14px; max-height: calc(100vh - 80px); overflow-y: auto; scrollbar-width: thin; }
 .rail > * { flex-shrink: 0; }

@@ -1,3 +1,5 @@
+import { capDiff } from './parser.js';
+
 const CODEX_LINE_TYPES = new Set(['session_meta', 'response_item', 'event_msg', 'turn_context', 'compacted']);
 
 export function looksLikeCodexSession(raw) {
@@ -103,7 +105,8 @@ export function parseCodexSession(raw, { sourcePath = null } = {}) {
       const action = codexAction(tool);
       const files = tool === 'apply_patch' ? patchFiles(p.input) : [];
       const args = files.length ? { file_path: files[0] } : { input: String(p.input ?? '').slice(0, 200) };
-      events.push({ type: 'tool_call', timestamp: ts, tool, args, toolUseId: p.call_id, file: files[0] ?? null, action, model: currentModel });
+      const diff = tool === 'apply_patch' ? patchDiff(p.input) : null;
+      events.push({ type: 'tool_call', timestamp: ts, tool, args, toolUseId: p.call_id, file: files[0] ?? null, action, diff, model: currentModel });
       for (const f of files) touch(f, tool, ts, action);
     } else if (p.type === 'web_search_call') {
       const query = p.action?.query ?? '';
@@ -179,6 +182,19 @@ function codexAction(tool) {
   if (t.includes('web') || t.includes('fetch')) return 'web';
   if (t.includes('agent') || t === 'task') return 'agent';
   return 'other';
+}
+
+function patchDiff(input) {
+  const lines = [];
+  for (const raw of String(input ?? '').split('\n')) {
+    if (raw.startsWith('*** Begin Patch') || raw.startsWith('*** End Patch') || !raw.trim()) continue;
+    if (raw.startsWith('*** ')) lines.push({ s: '~', t: raw.slice(4) });
+    else if (raw.startsWith('@@')) lines.push({ s: '~', t: raw });
+    else if (raw.startsWith('+')) lines.push({ s: '+', t: raw.slice(1) });
+    else if (raw.startsWith('-')) lines.push({ s: '-', t: raw.slice(1) });
+    else lines.push({ s: ' ', t: raw.startsWith(' ') ? raw.slice(1) : raw });
+  }
+  return capDiff(lines);
 }
 
 function patchFiles(input) {
