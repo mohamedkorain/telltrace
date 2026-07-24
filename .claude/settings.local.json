@@ -39,7 +39,13 @@
       "Bash(python3 -)",
       "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless --disable-gpu --screenshot=/private/tmp/claude-501/-Users-mkorain-users-mkorain-telltrace/5b2e9612-4ccf-48a9-abc3-5d3d56e5b042/scratchpad/diff-shot.png --window-size=1200,2400 --hide-scrollbars file:///private/tmp/claude-501/-Users-mkorain-users-mkorain-telltrace/5b2e9612-4ccf-48a9-abc3-5d3d56e5b042/scratchpad/diff-claude-open.html)",
       "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless --disable-gpu --screenshot=/private/tmp/claude-501/-Users-mkorain-users-mkorain-telltrace/5b2e9612-4ccf-48a9-abc3-5d3d56e5b042/scratchpad/demo-diff.png --window-size=1100,900 --hide-scrollbars file:///private/tmp/claude-501/-Users-mkorain-users-mkorain-telltrace/5b2e9612-4ccf-48a9-abc3-5d3d56e5b042/scratchpad/demo-diff.html)",
-      "Bash(git commit --quiet -m 'Add inline diffs for Edit/Write/apply_patch *)"
+      "Bash(git commit --quiet -m 'Add inline diffs for Edit/Write/apply_patch *)",
+      "Bash(grep -v \"^[0-9a-f-]*\\\\.jsonl$\")",
+      "Read(//Users/mkorain/.claude/**)",
+      "Bash(python3)",
+      "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless --disable-gpu --screenshot=/private/tmp/claude-501/-Users-mkorain-users-mkorain-telltrace/5b2e9612-4ccf-48a9-abc3-5d3d56e5b042/scratchpad/sub-shot.png --window-size=1100,1400 --hide-scrollbars 'file:///private/tmp/claude-501/-Users-mkorain-users-mkorain-telltrace/5b2e9612-4ccf-48a9-abc3-5d3d56e5b042/scratchpad/sub-real-open.html#p23')",
+      "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless --disable-gpu --screenshot=/private/tmp/claude-501/-Users-mkorain-users-mkorain-telltrace/5b2e9612-4ccf-48a9-abc3-5d3d56e5b042/scratchpad/sub-focus.png --window-size=900,1100 --hide-scrollbars file:///private/tmp/claude-501/-Users-mkorain-users-mkorain-telltrace/5b2e9612-4ccf-48a9-abc3-5d3d56e5b042/scratchpad/sub-real-focus.html)",
+      "Bash(git commit --quiet -m 'Add subagent threads *)"
     ]
   }
 }

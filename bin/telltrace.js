@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
-import { resolve, join, basename } from 'node:path';
-import { parseSession } from '../src/parser.js';
+import { resolve, join, basename, dirname } from 'node:path';
+import { parseSession, attachSubagentFiles } from '../src/parser.js';
 import { parseCodexSession, looksLikeCodexSession } from '../src/parser-codex.js';
 import { renderHTML } from '../src/render.js';
 
@@ -58,6 +58,10 @@ const raw = readFileSync(resolved, 'utf8');
 const session = looksLikeCodexSession(raw)
   ? parseCodexSession(raw, { sourcePath: resolved })
   : parseSession(raw, { sourcePath: resolved });
+
+if (session.agent !== 'codex') {
+  attachSubagentFiles(session, loadSubagents(resolved));
+}
 const html = renderHTML(session);
 
 writeFileSync(outputPath, html, 'utf8');
@@ -86,6 +90,25 @@ function resolveInput(p) {
   return abs;
 }
 
+// Subagent transcripts live in <session-dir>/<session-id>/subagents/.
+function loadSubagents(sessionPath) {
+  const subDir = join(dirname(sessionPath), basename(sessionPath, '.jsonl'), 'subagents');
+  if (!existsSync(subDir)) return [];
+  const subs = [];
+  for (const f of readdirSync(subDir)) {
+    if (!f.endsWith('.meta.json')) continue;
+    try {
+      const meta = JSON.parse(readFileSync(join(subDir, f), 'utf8'));
+      const transcript = join(subDir, f.replace(/\.meta\.json$/, '.jsonl'));
+      if (!existsSync(transcript)) continue;
+      subs.push({ ...meta, session: parseSession(readFileSync(transcript, 'utf8')) });
+    } catch {
+      continue;
+    }
+  }
+  return subs;
+}
+
 function findLatestSession(which = 'any') {
   const home = process.env.HOME || process.env.USERPROFILE;
   const roots = [];
@@ -97,7 +120,7 @@ function findLatestSession(which = 'any') {
       const full = join(dir, f);
       const stat = statSync(full);
       if (stat.isDirectory()) {
-        if (depth < 4) walk(full, depth + 1);
+        if (f !== 'subagents' && depth < 4) walk(full, depth + 1);
       } else if (f.endsWith('.jsonl')) {
         if (!best || stat.mtimeMs > best.mtime) best = { full, mtime: stat.mtimeMs };
       }

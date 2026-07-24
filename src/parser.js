@@ -1,7 +1,13 @@
 export function parseSession(raw, { sourcePath = null } = {}) {
   const lines = raw.split('\n').filter(l => l.trim().length > 0);
   const events = [];
+  const sideEntries = [];
   const filesTouched = new Map();
+  const touch = (e) => {
+    const existing = filesTouched.get(e.file) ?? { file: e.file, events: [] };
+    existing.events.push({ tool: e.tool, ts: e.timestamp, action: e.action });
+    filesTouched.set(e.file, existing);
+  };
   let model = null;
   let firstTs = null;
   let lastTs = null;
@@ -36,13 +42,36 @@ export function parseSession(raw, { sourcePath = null } = {}) {
       add(usageByModel.get(key));
     }
 
+    // Older Claude Code versions record subagent work inline as sidechain
+    // entries; route them into their own threads instead of the main feed.
+    if (entry.isSidechain === true) {
+      sideEntries.push(entry);
+      continue;
+    }
+
     const norm = normalizeEntry(entry, entryModel);
     for (const e of norm) {
       events.push(e);
-      if (e.type === 'tool_call' && e.file) {
-        const existing = filesTouched.get(e.file) ?? { file: e.file, events: [] };
-        existing.events.push({ tool: e.tool, ts: e.timestamp, action: e.action });
-        filesTouched.set(e.file, existing);
+      if (e.type === 'tool_call' && e.file) touch(e);
+    }
+  }
+
+  if (events.length === 0 && sideEntries.length > 0) {
+    // The whole file is sidechain: it IS a subagent transcript (the
+    // agent-<id>.jsonl layout). Treat its entries as the main thread.
+    for (const entry of sideEntries) {
+      for (const e of normalizeEntry(entry, entry.message?.model ?? null)) {
+        events.push(e);
+        if (e.type === 'tool_call' && e.file) touch(e);
+      }
+    }
+  } else {
+    for (const thread of buildSideThreads(sideEntries)) {
+      const candidates = events.filter(e => e.type === 'tool_call' && isAgentTool(e.tool) && !e.sub);
+      const target = candidates.find(e => e.args?.prompt === thread.prompt) ?? candidates[0];
+      if (target) target.sub = { prompt: thread.prompt, events: thread.events };
+      for (const e of thread.events) {
+        if (e.type === 'tool_call' && e.file) touch(e);
       }
     }
   }
@@ -57,6 +86,76 @@ export function parseSession(raw, { sourcePath = null } = {}) {
     usage,
     usageByModel: Object.fromEntries(usageByModel),
   };
+}
+
+function isAgentTool(tool) {
+  const t = String(tool ?? '').toLowerCase();
+  return t === 'task' || t === 'agent' || t.startsWith('agent');
+}
+
+// Group inline sidechain entries into per-agent threads: by agentId when
+// present, otherwise by following parentUuid chains in file order.
+function buildSideThreads(entries) {
+  const groups = new Map();
+  const uuidToKey = new Map();
+  let n = 0;
+  for (const entry of entries) {
+    const key = entry.agentId ?? uuidToKey.get(entry.parentUuid) ?? `g${n++}`;
+    if (entry.uuid) uuidToKey.set(entry.uuid, key);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(entry);
+  }
+  return [...groups.values()].map(list => {
+    const evs = list.flatMap(e => normalizeEntry(e, e.message?.model ?? null));
+    const promptEv = evs.find(x => x.type === 'prompt');
+    return { prompt: promptEv?.text ?? '', events: evs.filter(x => x !== promptEv) };
+  });
+}
+
+// Newer Claude Code stores each subagent as <session>/subagents/agent-<id>.jsonl
+// plus a .meta.json whose toolUseId points at the spawning Agent/Task call.
+export function attachSubagentFiles(session, subs) {
+  const byId = new Map(subs.filter(s => s.toolUseId).map(s => [s.toolUseId, s]));
+  const walk = (events) => {
+    for (const e of events) {
+      if (e.type !== 'tool_call' || e.sub) continue;
+      const sub = byId.get(e.toolUseId);
+      if (!sub) continue;
+      const sEvents = sub.session.events;
+      const promptEv = sEvents.find(x => x.type === 'prompt');
+      e.sub = {
+        agentType: sub.agentType ?? null,
+        description: sub.description ?? null,
+        model: sub.model ?? null,
+        prompt: promptEv?.text ?? '',
+        events: sEvents.filter(x => x !== promptEv),
+      };
+      mergeUsage(session, sub.session);
+      mergeFiles(session, sub.session);
+      walk(e.sub.events);
+    }
+  };
+  walk(session.events);
+}
+
+function mergeUsage(session, sub) {
+  for (const k of ['input', 'output', 'cacheRead', 'cacheWrite']) session.usage[k] += sub.usage[k];
+  for (const [m, u] of Object.entries(sub.usageByModel ?? {})) {
+    const target = session.usageByModel[m] ?? (session.usageByModel[m] = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+    for (const k of ['input', 'output', 'cacheRead', 'cacheWrite']) target[k] += u[k];
+  }
+}
+
+function mergeFiles(session, sub) {
+  const byFile = new Map(session.files.map(f => [f.file, f]));
+  for (const f of sub.files) {
+    const existing = byFile.get(f.file);
+    if (existing) existing.events.push(...f.events);
+    else {
+      byFile.set(f.file, f);
+      session.files.push(f);
+    }
+  }
 }
 
 function normalizeEntry(entry, entryModel) {

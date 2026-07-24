@@ -123,7 +123,7 @@ function threadify(items) {
         comments.push(current);
       }
       const last = current.runs[current.runs.length - 1];
-      if (last && last.tool === e.tool && last.action === e.action) {
+      if (last && !last.sub && !e.sub && last.tool === e.tool && last.action === e.action) {
         last.count++;
         if (e.file) last.files.add(e.file);
         if (e.args?.command) last.cmds.push(e.args.command);
@@ -137,6 +137,7 @@ function threadify(items) {
           cmds: e.args?.command ? [e.args.command] : [],
           arg: summarizeArgs(e.tool, e.args),
           diffs: e.diff ? [{ file: e.file, lines: e.diff }] : [],
+          sub: e.sub ?? null,
         });
       }
     }
@@ -222,7 +223,7 @@ function renderPost(post, multiModel, agentName) {
 }
 
 function renderComment(c, t0, agentName) {
-  const runs = c.runs.map(renderRun).join('');
+  const runs = c.runs.map(r => renderRun(r, t0)).join('');
   const off = offsetLabel(c.timestamp, t0);
   const longC = (c.text ?? '').length > 480;
   const body = c.text
@@ -232,7 +233,7 @@ function renderComment(c, t0, agentName) {
   <button class="threadline" data-fold aria-label="collapse"></button>
   <div class="c-main">
     <div class="c-meta">
-      <span class="avatar claude">${escapeHtml(agentName[0])}</span>
+      <span class="avatar claude">${escapeHtml(agentName[0].toUpperCase())}</span>
       <span class="author claude-a">${escapeHtml(agentName)}</span>
       <span class="dotsep"></span>
       <span class="when mono">${escapeHtml(off)}</span>
@@ -243,7 +244,7 @@ function renderComment(c, t0, agentName) {
 </div>`;
 }
 
-function renderRun(r) {
+function renderRun(r, t0) {
   const cfg = ACTION[r.action] ?? ACTION.other;
   let detail = '';
   if (r.action === 'bash' && r.cmds.length) {
@@ -266,6 +267,18 @@ function renderRun(r) {
     ${detail ? `<span class="run-d mono">${escapeHtml(truncate(detail, 88))}</span>` : ''}`;
   const tip = escapeHtml(tipParts.filter(Boolean).join(' · '));
 
+  if (r.sub) {
+    const label = r.sub.agentType ?? 'agent';
+    const ops = r.sub.events.filter(e => e.type === 'tool_call').length;
+    const subComments = threadify(r.sub.events).map(c => renderComment(c, t0, label)).join('');
+    return `<details class="rund">
+  <summary class="run" data-tip="${tip}">${row}<span class="run-diffb mono">${ops} ops · thread</span></summary>
+  <div class="subthread">
+    ${r.sub.prompt ? `<div class="sub-prompt">${escapeHtml(truncate(r.sub.prompt, 260))}</div>` : ''}
+    ${subComments || '<div class="no-comments">no recorded activity</div>'}
+  </div>
+</details>`;
+  }
   if (!r.diffs?.length) {
     return `<div class="run" data-tip="${tip}">${row}</div>`;
   }
@@ -621,6 +634,9 @@ pre.diff { margin: 0; padding: 6px 0; font-size: 11px; line-height: 1.55; overfl
 .dl.del { background: rgba(229,83,75,0.11); color: #e8938c; }
 .dl.meta { color: var(--faint); padding-top: 2px; }
 .dl.ctx { color: var(--dim); }
+.subthread { margin: 6px 0 4px 12px; padding-left: 13px; border-left: 2px solid var(--border-hi); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sub-prompt { font-size: 11px; color: var(--faint); font-style: italic; padding: 3px 0 4px; }
+.subthread .comment { margin-top: 2px; }
 
 .rail { position: sticky; top: 66px; display: flex; flex-direction: column; gap: 14px; max-height: calc(100vh - 80px); overflow-y: auto; scrollbar-width: thin; }
 .rail > * { flex-shrink: 0; }

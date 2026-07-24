@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCodexSession, looksLikeCodexSession } from '../src/parser-codex.js';
-import { parseSession } from '../src/parser.js';
+import { parseSession, attachSubagentFiles } from '../src/parser.js';
 import { renderHTML } from '../src/render.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -88,6 +88,56 @@ test('renders expandable diff blocks', () => {
   assert.match(html, /<details class="rund">/);
   assert.match(html, /class="dl add"/);
   assert.match(html, /class="dl del"/);
+});
+
+const mainWithAgent = [
+  JSON.stringify({ type: 'user', timestamp: 't1', message: { role: 'user', content: 'build the thing' } }),
+  JSON.stringify({ type: 'assistant', timestamp: 't2', message: { model: 'fable-5', usage: { input_tokens: 100, output_tokens: 50 }, content: [
+    { type: 'tool_use', id: 'tu_agent_1', name: 'Agent', input: { prompt: 'explore the repo', subagent_type: 'Explore' } },
+  ] } }),
+].join('\n');
+
+const subRaw = [
+  JSON.stringify({ type: 'user', timestamp: 't3', isSidechain: true, agentId: 'a1', message: { role: 'user', content: 'explore the repo' } }),
+  JSON.stringify({ type: 'assistant', timestamp: 't4', isSidechain: true, agentId: 'a1', message: { model: 'haiku', usage: { input_tokens: 10, output_tokens: 5 }, content: [
+    { type: 'text', text: 'Looking around.' },
+    { type: 'tool_use', id: 'tu_read', name: 'Read', input: { file_path: '/sub.js' } },
+  ] } }),
+].join('\n');
+
+test('attaches file-based subagent transcripts by toolUseId', () => {
+  const session = parseSession(mainWithAgent);
+  attachSubagentFiles(session, [
+    { toolUseId: 'tu_agent_1', agentType: 'Explore', model: 'haiku', session: parseSession(subRaw) },
+  ]);
+  const agentCall = session.events.find(e => e.type === 'tool_call' && e.tool === 'Agent');
+  assert.equal(agentCall.sub.agentType, 'Explore');
+  assert.equal(agentCall.sub.prompt, 'explore the repo');
+  assert.equal(agentCall.sub.events.filter(e => e.type === 'tool_call').length, 1);
+  assert.equal(session.usage.input, 110);
+  assert.ok(session.files.some(f => f.file === '/sub.js'));
+  assert.ok(session.usageByModel['haiku']);
+});
+
+test('attaches inline sidechain entries to the agent call', () => {
+  const session = parseSession(mainWithAgent + '\n' + subRaw);
+  const prompts = session.events.filter(e => e.type === 'prompt');
+  assert.equal(prompts.length, 1, 'sidechain prompt must not become a main post');
+  const agentCall = session.events.find(e => e.type === 'tool_call' && e.tool === 'Agent');
+  assert.equal(agentCall.sub.prompt, 'explore the repo');
+  assert.equal(agentCall.sub.events.filter(e => e.type === 'tool_call').length, 1);
+  assert.ok(session.files.some(f => f.file === '/sub.js'));
+});
+
+test('renders nested subagent threads', () => {
+  const session = parseSession(mainWithAgent);
+  attachSubagentFiles(session, [
+    { toolUseId: 'tu_agent_1', agentType: 'Explore', session: parseSession(subRaw) },
+  ]);
+  const html = renderHTML(session);
+  assert.match(html, /class="subthread"/);
+  assert.match(html, /1 ops · thread/);
+  assert.match(html, /class="author claude-a">Explore</);
 });
 
 test('renders codex session with Codex byline', () => {
